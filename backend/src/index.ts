@@ -20,6 +20,7 @@ import { createBalanceRouter } from './routes/balance';
 import { createPricesRouter } from './routes/prices';
 import { createTradesRouter } from './routes/trades';
 import { createStatsRouter } from './routes/stats';
+import { createConfigRouter } from './routes/config';
 
 async function main(): Promise<void> {
   // Connect to MongoDB
@@ -34,11 +35,8 @@ async function main(): Promise<void> {
   const books = new OrderBookManager();
   const engine = new MatchingEngine(books);
 
-  // Services
   const settlementService = new SettlementService(provider);
-  const depositService = new DepositService(provider, relayer.address);
   const claimService = new ClaimService(provider);
-  const marketSyncer = new MarketSyncer(provider, books, claimService);
 
   // Express app
   const app = express();
@@ -50,9 +48,11 @@ async function main(): Promise<void> {
     res.json({ status: 'ok', relayer: relayer.address, uptime: process.uptime() });
   });
 
+  app.use('/config', createConfigRouter(relayer.address));
+
   // API routes
   app.use('/orders', createOrdersRouter(engine));
-  app.use('/markets', createMarketsRouter(books));
+  app.use('/markets', createMarketsRouter(books, claimService));
   app.use('/orderbook', createOrderBookRouter(books));
   app.use('/positions', createPositionsRouter());
   app.use('/balance', createBalanceRouter(provider, relayer));
@@ -60,9 +60,12 @@ async function main(): Promise<void> {
   app.use('/trades', createTradesRouter());
   app.use('/stats', createStatsRouter());
 
-  // HTTP + WebSocket server
+  // HTTP + WebSocket server (before services that broadcast)
   const server = http.createServer(app);
   const wsServer = new WsServer(server, engine);
+
+  const depositService = new DepositService(provider, relayer.address, wsServer);
+  const marketSyncer = new MarketSyncer(provider, books, claimService, wsServer);
 
   // Start all services
   engine.start();

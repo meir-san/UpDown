@@ -22,10 +22,22 @@ export function createTradesRouter(): Router {
         limit = Math.min(n, MAX_LIMIT);
       }
 
+      let skip = 0;
+      const rawOffset = req.query.offset ?? req.query.skip;
+      if (rawOffset !== undefined && rawOffset !== '') {
+        const o = typeof rawOffset === 'string' ? parseInt(rawOffset, 10) : Number(rawOffset);
+        if (!Number.isFinite(o) || o < 0) {
+          res.status(400).json({ error: 'Invalid offset' });
+          return;
+        }
+        skip = Math.min(o, MAX_LIMIT * 10);
+      }
+
       const rows = await TradeModel.find({
         $or: [{ buyer: wallet }, { seller: wallet }],
       })
         .sort({ createdAt: -1 })
+        .skip(skip)
         .limit(limit)
         .lean();
 

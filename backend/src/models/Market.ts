@@ -10,6 +10,8 @@ export interface IMarket extends Document {
   winner: number | null;
   upPrice: string;
   downPrice: string;
+  /** Chainlink strike at registration (int256 as string, pool token decimals). */
+  strikePrice: string;
   volume: string;
   claimedByRelayer: boolean;
   /** All MongoDB winnings from this claim have been credited (idempotent with claimedByRelayer). */
@@ -37,6 +39,7 @@ const MarketSchema = new Schema<IMarket>(
     winner: { type: Number, default: null },
     upPrice: { type: String, default: '0' },
     downPrice: { type: String, default: '0' },
+    strikePrice: { type: String, default: '' },
     volume: { type: String, default: '0' },
     claimedByRelayer: { type: Boolean, default: false },
     claimDistributionComplete: { type: Boolean, default: false },

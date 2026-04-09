@@ -20,6 +20,7 @@ export function createBalanceRouter(
         inOrders: bal.inOrders,
         totalDeposited: bal.totalDeposited,
         totalWithdrawn: bal.totalWithdrawn,
+        withdrawNonce: bal.withdrawNonce,
       });
     } catch (err) {
       console.error('[Balance] GET error:', err);

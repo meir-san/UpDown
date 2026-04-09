@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
 import { config } from '../config';
-import { creditBalance } from '../models/Balance';
+import { creditBalance, getOrCreateBalance } from '../models/Balance';
 import { ProcessedDepositTxModel } from '../models/ProcessedDepositTx';
+import type { WsServer } from '../ws/WebSocketServer';
 import ERC20Abi from '../abis/ERC20.json';
 
 /**
@@ -12,11 +13,13 @@ export class DepositService {
   private provider: ethers.JsonRpcProvider;
   private usdtContract: ethers.Contract;
   private relayerAddress: string;
+  private ws: WsServer | null;
   private running = false;
 
-  constructor(provider: ethers.JsonRpcProvider, relayerAddress: string) {
+  constructor(provider: ethers.JsonRpcProvider, relayerAddress: string, ws: WsServer | null = null) {
     this.provider = provider;
     this.relayerAddress = relayerAddress.toLowerCase();
+    this.ws = ws;
     this.usdtContract = new ethers.Contract(config.usdtAddress, ERC20Abi, provider);
   }
 
@@ -50,6 +53,17 @@ export class DepositService {
           await ProcessedDepositTxModel.deleteOne({ txHash }).catch(() => {});
           throw creditErr;
         }
+
+        const wallet = from.toLowerCase();
+        const bal = await getOrCreateBalance(wallet);
+        this.ws?.broadcastBalanceUpdate(wallet, {
+          available: bal.available,
+          inOrders: bal.inOrders,
+          totalDeposited: bal.totalDeposited,
+          totalWithdrawn: bal.totalWithdrawn,
+          withdrawNonce: bal.withdrawNonce,
+        });
+
         console.log(
           `[Deposit] Credited ${value.toString()} USDT to ${from} (tx: ${event.transactionHash})`
         );

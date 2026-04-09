@@ -3,6 +3,7 @@ import { MarketModel } from '../models/Market';
 import { TradeModel } from '../models/Trade';
 import { OrderBookManager } from '../engine/OrderBook';
 import type { OrderBookSnapshot } from '../engine/types';
+import type { ClaimService } from '../services/ClaimService';
 
 const ALLOWED_TIMEFRAMES = new Set([300, 900, 3600]);
 
@@ -18,7 +19,7 @@ function bestBidAsk(snapshot: OrderBookSnapshot): {
   };
 }
 
-export function createMarketsRouter(books: OrderBookManager): Router {
+export function createMarketsRouter(books: OrderBookManager, claimService: ClaimService): Router {
   const router = Router();
 
   router.get('/', async (req: Request, res: Response) => {
@@ -57,12 +58,24 @@ export function createMarketsRouter(books: OrderBookManager): Router {
         winner: m.winner,
         upPrice: m.upPrice,
         downPrice: m.downPrice,
+        strikePrice: m.strikePrice ?? '',
         volume: m.volume,
       }));
 
       res.json(result);
     } catch (err) {
       console.error('[Markets] GET error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  router.post('/:address/claim', async (req: Request, res: Response) => {
+    try {
+      const addr = (req.params.address as string).toLowerCase();
+      await claimService.processResolvedMarket(addr);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('[Markets] POST /:address/claim error:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

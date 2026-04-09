@@ -3,8 +3,13 @@ import { config } from '../config';
 import { MarketModel } from '../models/Market';
 import { OrderBookManager } from '../engine/OrderBook';
 import { ClaimService } from './ClaimService';
+import type { WsServer } from '../ws/WebSocketServer';
 import AutoCyclerAbi from '../abis/AutoCycler.json';
 import TradePoolAbi from '../abis/TradePool.json';
+
+const RESOLVER_MARKETS_IFACE = new ethers.Interface([
+  'function markets(address pool) view returns (bytes32 pairId, int256 strikePrice, bool resolved)',
+]);
 
 /**
  * Polls the UpDownAutoCycler contract for active markets.
@@ -15,16 +20,19 @@ export class MarketSyncer {
   private provider: ethers.JsonRpcProvider;
   private books: OrderBookManager;
   private claimService: ClaimService;
+  private ws: WsServer | null;
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     provider: ethers.JsonRpcProvider,
     books: OrderBookManager,
-    claimService: ClaimService
+    claimService: ClaimService,
+    ws: WsServer | null = null
   ) {
     this.provider = provider;
     this.books = books;
     this.claimService = claimService;
+    this.ws = ws;
   }
 
   start(): void {
@@ -101,11 +109,25 @@ export class MarketSyncer {
       // Pool may not have prices yet
     }
 
+    let strikePrice = '';
+    try {
+      const resolverAddr: string = await pool.resolver();
+      if (resolverAddr && resolverAddr !== ethers.ZeroAddress) {
+        const resolver = new ethers.Contract(resolverAddr, RESOLVER_MARKETS_IFACE, this.provider);
+        const row = await resolver.markets(poolAddress);
+        strikePrice = row.strikePrice.toString();
+      }
+    } catch {
+      // Resolver missing or markets() not available
+    }
+
     const now = Math.floor(Date.now() / 1000);
     let status = 'ACTIVE';
     if (now > endTime) {
       status = 'TRADING_ENDED';
     }
+
+    const prior = await MarketModel.findOne({ address: normalized }).select('address').lean();
 
     await MarketModel.findOneAndUpdate(
       { address: normalized },
@@ -118,9 +140,20 @@ export class MarketSyncer {
         status,
         upPrice,
         downPrice,
+        strikePrice,
       },
       { upsert: true, new: true }
     );
+
+    if (!prior) {
+      this.ws?.broadcastMarketEvent('market_created', {
+        address: normalized,
+        pairId: ethers.decodeBytes32String(pairId).replace(/\0/g, '') || pairId,
+        endTime,
+        duration: endTime - startTime,
+        strikePrice,
+      });
+    }
 
     // Initialize order books
     this.books.getOrCreate(normalized, 1);
@@ -138,6 +171,11 @@ export class MarketSyncer {
           { address: marketAddress.toLowerCase() },
           { status: 'RESOLVED', winner }
         );
+
+        this.ws?.broadcastMarketEvent('market_resolved', {
+          address: marketAddress.toLowerCase(),
+          winner,
+        });
 
         await this.claimService.processResolvedMarket(marketAddress);
       }
