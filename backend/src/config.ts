@@ -30,6 +30,12 @@ export const config = {
   settlementBatchIntervalMs: parseInt(optional('SETTLEMENT_BATCH_INTERVAL_MS', '30000'), 10),
   marketSyncIntervalMs: parseInt(optional('MARKET_SYNC_INTERVAL_MS', '15000'), 10),
   depositConfirmations: parseInt(optional('DEPOSIT_CONFIRMATIONS', '3'), 10),
+
+  /** Base URL for rain-speed-markets price history API (proxied at GET /prices/history/:symbol). */
+  speedMarketApiBaseUrl: optional(
+    'SPEED_MARKET_API_BASE_URL',
+    'https://rain-speed-markets-dev-api.quecko.org'
+  ),
 } as const;
 
 export const USDT_DECIMALS = 6;

@@ -46,6 +46,10 @@ These are not variables. Code that contradicts them is a bug.
 - Creator fee: 0% — markets are auto-generated, no creator entity exists
 - Any hardcoded 5% anywhere is wrong
 
+### Data sources / indexing
+- UpDown uses **MongoDB** as the source of truth for markets, trades, balances, and API-backed UI aggregates.
+- The **RAIN subgraph is not used** for this product: matching is off-chain, and on-chain `enterOption` only reflects **relayer aggregate** positions, so subgraph data does not represent per-user fills or positions.
+
 ### Markets
 - Timeframes: 5, 10, 15 minutes only
 - Pairs: BTC/USD at MVP. ETH/USD is future expansion, not built yet.

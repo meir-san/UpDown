@@ -1,17 +1,51 @@
 import { Router, Request, Response } from 'express';
 import { MarketModel } from '../models/Market';
 import { TradeModel } from '../models/Trade';
+import { OrderBookManager } from '../engine/OrderBook';
+import type { OrderBookSnapshot } from '../engine/types';
 
-export function createMarketsRouter(): Router {
+const ALLOWED_TIMEFRAMES = new Set([300, 900, 3600]);
+
+function bestBidAsk(snapshot: OrderBookSnapshot): {
+  bestBid: { price: number; depth: string } | null;
+  bestAsk: { price: number; depth: string } | null;
+} {
+  const bid = snapshot.bids[0];
+  const ask = snapshot.asks[0];
+  return {
+    bestBid: bid ? { price: bid.price, depth: bid.depth } : null,
+    bestAsk: ask ? { price: ask.price, depth: ask.depth } : null,
+  };
+}
+
+export function createMarketsRouter(books: OrderBookManager): Router {
   const router = Router();
 
-  router.get('/', async (_req: Request, res: Response) => {
+  router.get('/', async (req: Request, res: Response) => {
     try {
-      const markets = await MarketModel.find({
+      const rawTf = req.query.timeframe;
+      let durationFilter: number | undefined;
+
+      if (rawTf !== undefined && rawTf !== '') {
+        const n = typeof rawTf === 'string' ? parseInt(rawTf, 10) : Number(rawTf);
+        if (!ALLOWED_TIMEFRAMES.has(n)) {
+          res.status(400).json({
+            error: 'Invalid timeframe',
+            allowed: [300, 900, 3600],
+          });
+          return;
+        }
+        durationFilter = n;
+      }
+
+      const filter: Record<string, unknown> = {
         status: { $in: ['ACTIVE', 'TRADING_ENDED', 'RESOLVED'] },
-      })
-        .sort({ endTime: -1 })
-        .lean();
+      };
+      if (durationFilter !== undefined) {
+        filter.duration = durationFilter;
+      }
+
+      const markets = await MarketModel.find(filter).sort({ endTime: -1 }).lean();
 
       const result = markets.map((m) => ({
         address: m.address,
@@ -44,16 +78,26 @@ export function createMarketsRouter(): Router {
         return;
       }
 
-      // Calculate volume from trades
       const trades = await TradeModel.find({ market: market.address });
       let volume = 0n;
       for (const t of trades) {
         volume += BigInt(t.amount);
       }
 
+      const nowSec = Math.floor(Date.now() / 1000);
+      const timeRemainingSeconds = Math.max(0, market.endTime - nowSec);
+
+      const snap = books.getMarketSnapshot(market.address);
+      const orderBook = {
+        up: bestBidAsk(snap.up),
+        down: bestBidAsk(snap.down),
+      };
+
       res.json({
         ...market,
         volume: volume.toString(),
+        timeRemainingSeconds,
+        orderBook,
       });
     } catch (err) {
       console.error('[Markets] GET /:address error:', err);

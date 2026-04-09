@@ -17,6 +17,9 @@ import { createMarketsRouter } from './routes/markets';
 import { createOrderBookRouter } from './routes/orderbook';
 import { createPositionsRouter } from './routes/positions';
 import { createBalanceRouter } from './routes/balance';
+import { createPricesRouter } from './routes/prices';
+import { createTradesRouter } from './routes/trades';
+import { createStatsRouter } from './routes/stats';
 
 async function main(): Promise<void> {
   // Connect to MongoDB
@@ -49,10 +52,13 @@ async function main(): Promise<void> {
 
   // API routes
   app.use('/orders', createOrdersRouter(engine));
-  app.use('/markets', createMarketsRouter());
+  app.use('/markets', createMarketsRouter(books));
   app.use('/orderbook', createOrderBookRouter(books));
   app.use('/positions', createPositionsRouter());
   app.use('/balance', createBalanceRouter(provider, relayer));
+  app.use('/prices', createPricesRouter());
+  app.use('/trades', createTradesRouter());
+  app.use('/stats', createStatsRouter());
 
   // HTTP + WebSocket server
   const server = http.createServer(app);
