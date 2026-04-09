@@ -13,6 +13,7 @@ Responses use **429 Too Many Requests** with JSON `{ "error": "…" }` when limi
 
 - `GET /markets` — optional `timeframe` (`300` | `900` | `3600`), optional `pair` (`BTC-USD` | `ETH-USD`).
 - `GET /markets/:address` — detail + `orderBook`, `timeRemainingSeconds`, `pairSymbol`, `chartSymbol`.
+- `POST /markets/:address/claim` — relayer-only: header `x-updown-admin-key` must match `CLAIM_ADMIN_API_KEY` if set, otherwise JSON body `{ "signature": "0x..." }` must be an EIP-191 signature from the relayer over `updown:claim:<address>:<chainId>`.
 
 ## Orders
 

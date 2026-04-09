@@ -37,6 +37,18 @@ export function createBalanceRouter(
         return;
       }
 
+      let withdrawAmount: bigint;
+      try {
+        withdrawAmount = BigInt(amount);
+      } catch {
+        res.status(400).json({ error: 'Invalid amount' });
+        return;
+      }
+      if (withdrawAmount <= 0n) {
+        res.status(400).json({ error: 'Amount must be positive' });
+        return;
+      }
+
       const bal = await getOrCreateBalance(wallet);
 
       const valid = verifyWithdrawSignature(wallet, amount, bal.withdrawNonce, signature);
@@ -45,7 +57,6 @@ export function createBalanceRouter(
         return;
       }
 
-      const withdrawAmount = BigInt(amount);
       const available = BigInt(bal.available);
 
       if (available < withdrawAmount) {

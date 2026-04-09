@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, ClientSession } from 'mongoose';
 
 export interface IBalance extends Document {
   wallet: string;
@@ -24,25 +24,62 @@ const BalanceSchema = new Schema<IBalance>(
 
 export const BalanceModel = mongoose.model<IBalance>('Balance', BalanceSchema);
 
-export async function getOrCreateBalance(wallet: string): Promise<IBalance> {
+const dec = (x: string) => ({ $toDecimal: { $ifNull: [x, '0'] } });
+
+export async function getOrCreateBalance(wallet: string, session?: ClientSession): Promise<IBalance> {
   const normalized = wallet.toLowerCase();
-  let balance = await BalanceModel.findOne({ wallet: normalized });
-  if (!balance) {
-    balance = await BalanceModel.create({ wallet: normalized });
-  }
-  return balance;
+  const doc = await BalanceModel.findOneAndUpdate(
+    { wallet: normalized },
+    {
+      $setOnInsert: {
+        wallet: normalized,
+        available: '0',
+        inOrders: '0',
+        totalDeposited: '0',
+        totalWithdrawn: '0',
+        withdrawNonce: 0,
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true, session }
+  );
+  return doc!;
 }
 
 export async function creditBalance(wallet: string, amount: bigint, field: 'available' | 'totalDeposited' = 'available'): Promise<void> {
+  if (amount <= 0n) throw new Error('credit amount must be positive');
   const normalized = wallet.toLowerCase();
-  const bal = await getOrCreateBalance(normalized);
-  const current = BigInt(bal[field]);
-  bal[field] = (current + amount).toString();
+  const amtStr = amount.toString();
+  await getOrCreateBalance(normalized);
+
   if (field === 'totalDeposited') {
-    const avail = BigInt(bal.available);
-    bal.available = (avail + amount).toString();
+    await BalanceModel.findOneAndUpdate(
+      { wallet: normalized },
+      [
+        {
+          $set: {
+            available: {
+              $toString: { $add: [dec('$available'), dec(amtStr)] },
+            },
+            totalDeposited: {
+              $toString: { $add: [dec('$totalDeposited'), dec(amtStr)] },
+            },
+          },
+        },
+      ]
+    );
+    return;
   }
-  await bal.save();
+
+  await BalanceModel.findOneAndUpdate(
+    { wallet: normalized },
+    [
+      {
+        $set: {
+          available: { $toString: { $add: [dec('$available'), dec(amtStr)] } },
+        },
+      },
+    ]
+  );
 }
 
 /** Atomic move from available → inOrders when balance is sufficient (MongoDB $expr + aggregation update). */
@@ -113,22 +150,221 @@ export async function applyWithdrawalAccounting(wallet: string, amount: bigint):
   return doc !== null;
 }
 
-export async function releaseFromOrders(wallet: string, amount: bigint): Promise<void> {
+/** Atomically reduce inOrders only (filled trade — collateral leaves the buyer's locked balance). */
+export async function consumeFromOrders(wallet: string, amount: bigint, session?: ClientSession): Promise<boolean> {
+  if (amount <= 0n) return false;
   const normalized = wallet.toLowerCase();
-  const bal = await getOrCreateBalance(normalized);
-  const inOrd = BigInt(bal.inOrders);
-  bal.inOrders = (inOrd >= amount ? inOrd - amount : 0n).toString();
-  bal.available = (BigInt(bal.available) + amount).toString();
-  await bal.save();
+  const amtStr = amount.toString();
+  const doc = await BalanceModel.findOneAndUpdate(
+    {
+      wallet: normalized,
+      $expr: {
+        $gte: [{ $toDecimal: '$inOrders' }, { $toDecimal: amtStr }],
+      },
+    },
+    [
+      {
+        $set: {
+          inOrders: {
+            $toString: {
+              $subtract: [{ $toDecimal: '$inOrders' }, { $toDecimal: amtStr }],
+            },
+          },
+        },
+      },
+    ],
+    { new: true, session }
+  );
+  return doc !== null;
 }
 
-export async function settleTrade(buyer: string, seller: string, amount: bigint, makerFee: bigint): Promise<void> {
-  const buyerBal = await getOrCreateBalance(buyer.toLowerCase());
-  const buyerInOrders = BigInt(buyerBal.inOrders);
-  buyerBal.inOrders = (buyerInOrders >= amount ? buyerInOrders - amount : 0n).toString();
-  await buyerBal.save();
+/** Atomically move amount from inOrders → available (requires sufficient inOrders). */
+export async function releaseFromOrders(wallet: string, amount: bigint, session?: ClientSession): Promise<boolean> {
+  if (amount <= 0n) return false;
+  const normalized = wallet.toLowerCase();
+  const amtStr = amount.toString();
+  const doc = await BalanceModel.findOneAndUpdate(
+    {
+      wallet: normalized,
+      $expr: {
+        $gte: [{ $toDecimal: '$inOrders' }, { $toDecimal: amtStr }],
+      },
+    },
+    [
+      {
+        $set: {
+          inOrders: {
+            $toString: {
+              $subtract: [{ $toDecimal: '$inOrders' }, { $toDecimal: amtStr }],
+            },
+          },
+          available: {
+            $toString: {
+              $add: [{ $toDecimal: '$available' }, { $toDecimal: amtStr }],
+            },
+          },
+        },
+      },
+    ],
+    { new: true, session }
+  );
+  return doc !== null;
+}
 
-  const sellerBal = await getOrCreateBalance(seller.toLowerCase());
-  sellerBal.available = (BigInt(sellerBal.available) + amount + makerFee).toString();
-  await sellerBal.save();
+async function addToAvailable(wallet: string, amount: bigint, session?: ClientSession): Promise<void> {
+  const normalized = wallet.toLowerCase();
+  const amtStr = amount.toString();
+  await getOrCreateBalance(normalized, session);
+  await BalanceModel.findOneAndUpdate(
+    { wallet: normalized },
+    [
+      {
+        $set: {
+          available: { $toString: { $add: [dec('$available'), dec(amtStr)] } },
+        },
+      },
+    ],
+    { session }
+  );
+}
+
+/**
+ * Release fillAmount from buyer's inOrders; credit seller (sellerReceives + makerFee); credit treasury platformFee.
+ * Uses a MongoDB transaction when supported; otherwise sequential atomic updates.
+ */
+export async function settleFillBalances(
+  buyer: string,
+  seller: string,
+  treasury: string,
+  fillAmount: bigint,
+  platformFee: bigint,
+  sellerReceives: bigint,
+  makerFee: bigint
+): Promise<boolean> {
+  const b = buyer.toLowerCase();
+  const s = seller.toLowerCase();
+  const t = treasury.toLowerCase();
+  const sellerCredit = sellerReceives + makerFee;
+
+  const run = async (session: ClientSession | undefined) => {
+    const okConsume = await consumeFromOrders(b, fillAmount, session);
+    if (!okConsume) return false;
+    await addToAvailable(s, sellerCredit, session);
+    if (platformFee > 0n) {
+      await addToAvailable(t, platformFee, session);
+    }
+    return true;
+  };
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const ok = await run(session);
+      if (!ok) throw new Error('settleFillBalances: buyer consume or credit failed');
+    });
+    return true;
+  } catch (e) {
+    console.warn('[Balance] settleFillBalances transaction failed, trying non-transactional:', e);
+    try {
+      return await run(undefined);
+    } catch (e2) {
+      console.error('[Balance] settleFillBalances sequential failed:', e2);
+      return false;
+    }
+  } finally {
+    session.endSession();
+  }
+}
+
+/**
+ * Undo settleFillBalances when on-chain settlement permanently fails.
+ * Buyer regains full notional; seller and treasury lose what they received from the fill.
+ */
+export async function reverseSettledFill(
+  buyer: string,
+  seller: string,
+  treasury: string,
+  amount: bigint,
+  platformFee: bigint,
+  _makerFee: bigint
+): Promise<boolean> {
+  const b = buyer.toLowerCase();
+  const s = seller.toLowerCase();
+  const t = treasury.toLowerCase();
+  const sellerTaken = amount - platformFee;
+
+  const run = async (session: ClientSession | undefined) => {
+    await getOrCreateBalance(b, session);
+    const amtStr = amount.toString();
+    await BalanceModel.findOneAndUpdate(
+      { wallet: b },
+      [{ $set: { available: { $toString: { $add: [dec('$available'), dec(amtStr)] } } } }],
+      { session }
+    );
+
+    const sellerDebit = sellerTaken.toString();
+    const sellerDoc = await BalanceModel.findOneAndUpdate(
+      {
+        wallet: s,
+        $expr: { $gte: [{ $toDecimal: '$available' }, { $toDecimal: sellerDebit }] },
+      },
+      [
+        {
+          $set: {
+            available: {
+              $toString: {
+                $subtract: [{ $toDecimal: '$available' }, { $toDecimal: sellerDebit }],
+              },
+            },
+          },
+        },
+      ],
+      { new: true, session }
+    );
+    if (!sellerDoc) return false;
+
+    if (platformFee > 0n) {
+      const pf = platformFee.toString();
+      const treasDoc = await BalanceModel.findOneAndUpdate(
+        {
+          wallet: t,
+          $expr: { $gte: [{ $toDecimal: '$available' }, { $toDecimal: pf }] },
+        },
+        [
+          {
+            $set: {
+              available: {
+                $toString: {
+                  $subtract: [{ $toDecimal: '$available' }, { $toDecimal: pf }],
+                },
+              },
+            },
+          },
+        ],
+        { new: true, session }
+      );
+      if (!treasDoc) return false;
+    }
+
+    return true;
+  };
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const ok = await run(session);
+      if (!ok) throw new Error('reverseSettledFill failed');
+    });
+    return true;
+  } catch (e) {
+    console.warn('[Balance] reverseSettledFill transaction failed, trying sequential:', e);
+    try {
+      return await run(undefined);
+    } catch (e2) {
+      console.error('[Balance] reverseSettledFill sequential failed:', e2);
+      return false;
+    }
+  } finally {
+    session.endSession();
+  }
 }

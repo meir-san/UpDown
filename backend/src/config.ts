@@ -23,6 +23,12 @@ export const config = {
   factoryAddress: optional('FACTORY_ADDRESS', '0x05b1fd504583B81bd14c368d59E8c3e354b6C1dc'),
   usdtAddress: optional('USDT_ADDRESS', '0xCa4f77A38d8552Dd1D5E44e890173921B67725F4'),
 
+  /** Off-chain balance row that receives `platformFeeBps` from each fill (defaults to relayer in index.ts). */
+  feeTreasuryAddress: optional('FEE_TREASURY_ADDRESS', '').toLowerCase(),
+
+  /** If set, must be sent as `x-updown-admin-key` to POST /markets/:address/claim (or sign as relayer). */
+  claimAdminApiKey: optional('CLAIM_ADMIN_API_KEY', ''),
+
   platformFeeBps: parseInt(optional('PLATFORM_FEE_BPS', '70'), 10),
   makerFeeBps: parseInt(optional('MAKER_FEE_BPS', '80'), 10),
 

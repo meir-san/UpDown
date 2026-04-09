@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { config, MAX_UINT256, OPTION_UP, OPTION_DOWN } from '../config';
 import { TradeModel, ITrade } from '../models/Trade';
+import { reverseSettledFill } from '../models/Balance';
 import TradePoolAbi from '../abis/TradePool.json';
 import ERC20Abi from '../abis/ERC20.json';
 
@@ -97,18 +98,42 @@ export class SettlementService {
 
       if (locked.length === 0) continue;
 
+      let upTxHash: string | null = null;
+      let downTxHash: string | null = null;
+
       try {
         await this.ensureApproval(market);
 
         if (up > 0n) {
           const tx = await this.enterOption(market, OPTION_UP, up);
           console.log(`[Settlement] enterOption(UP, ${up}) on ${market} tx=${tx.hash}`);
-          await tx.wait();
+          const receipt = await tx.wait();
+          if (!receipt || receipt.status !== 1) {
+            throw new Error('enterOption UP receipt failed');
+          }
+          upTxHash = receipt.hash;
         }
         if (down > 0n) {
           const tx = await this.enterOption(market, OPTION_DOWN, down);
           console.log(`[Settlement] enterOption(DOWN, ${down}) on ${market} tx=${tx.hash}`);
-          await tx.wait();
+          const receipt = await tx.wait();
+          if (!receipt || receipt.status !== 1) {
+            throw new Error('enterOption DOWN receipt failed');
+          }
+          downTxHash = receipt.hash;
+        }
+
+        for (const t of locked) {
+          const hash = t.option === OPTION_UP ? upTxHash : downTxHash;
+          await TradeModel.updateOne(
+            { tradeId: t.tradeId },
+            {
+              $set: {
+                settlementStatus: 'CONFIRMED',
+                settlementTxHash: hash,
+              },
+            }
+          );
         }
       } catch (err) {
         console.error(`[Settlement] Failed to settle for market ${market}:`, err);
@@ -122,10 +147,30 @@ export class SettlementService {
               $set: {
                 settlementStatus: failed ? 'FAILED' : 'PENDING',
                 settlementRetryCount: nextRetries,
-                settlementNextRetryAt: failed ? null : new Date(Date.now() + settlementBackoffMs(nextRetries)),
+                settlementNextRetryAt: failed
+                  ? null
+                  : new Date(Date.now() + settlementBackoffMs(nextRetries)),
               },
             }
           );
+          if (failed) {
+            const treasury = (
+              config.feeTreasuryAddress || this.relayer.address
+            ).toLowerCase();
+            const ok = await reverseSettledFill(
+              t.buyer,
+              t.seller,
+              treasury,
+              BigInt(t.amount),
+              BigInt(t.platformFee),
+              BigInt(t.makerFee)
+            );
+            if (!ok) {
+              console.error(
+                `[Settlement] reverseSettledFill failed for FAILED trade ${t.tradeId}; manual reconciliation required`
+              );
+            }
+          }
         }
       }
     }

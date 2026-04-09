@@ -12,7 +12,12 @@ import {
 import { config } from '../config';
 import { OrderModel } from '../models/Order';
 import { TradeModel } from '../models/Trade';
-import { debitAvailable, releaseFromOrders, settleTrade } from '../models/Balance';
+import { MarketModel } from '../models/Market';
+import { debitAvailable, releaseFromOrders, settleFillBalances } from '../models/Balance';
+
+export type MatchingEngineOptions = {
+  platformFeeTreasury: string;
+};
 
 /**
  * Off-chain matching engine with cancel-before-taker priority.
@@ -22,14 +27,16 @@ import { debitAvailable, releaseFromOrders, settleTrade } from '../models/Balanc
  */
 export class MatchingEngine extends EventEmitter {
   readonly books: OrderBookManager;
+  readonly platformFeeTreasury: string;
 
   private pendingOrders: InternalOrder[] = [];
   private pendingCancels: { orderId: string; maker: string }[] = [];
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
 
-  constructor(books: OrderBookManager) {
+  constructor(books: OrderBookManager, opts: MatchingEngineOptions) {
     super();
     this.books = books;
+    this.platformFeeTreasury = opts.platformFeeTreasury.toLowerCase();
   }
 
   start(): void {
@@ -50,15 +57,49 @@ export class MatchingEngine extends EventEmitter {
   }
 
   async submitOrder(params: OrderParams): Promise<InternalOrder> {
+    const option = Number(params.option);
+    if (option !== 1 && option !== 2) {
+      throw new Error('Invalid option');
+    }
+
+    let amountBi: bigint;
+    try {
+      amountBi = BigInt(params.amount);
+    } catch {
+      throw new Error('Invalid amount');
+    }
+    if (amountBi <= 0n) {
+      throw new Error('Amount must be positive');
+    }
+
+    const sideEnum: OrderSide = params.side;
+    const typeEnum: OrderType = params.type;
+
+    if (typeEnum === OrderType.LIMIT) {
+      const p = params.price;
+      if (p < 1 || p > 9999) {
+        throw new Error('Limit price must be between 1 and 9999 (basis points)');
+      }
+    }
+
+    const marketNorm = params.market.toLowerCase();
+    const marketDoc = await MarketModel.findOne({
+      address: marketNorm,
+      status: 'ACTIVE',
+    }).lean();
+    if (!marketDoc) {
+      throw new Error('Market not found or not active');
+    }
+
     const order: InternalOrder = {
       id: uuidv4(),
       maker: params.maker.toLowerCase(),
-      market: params.market.toLowerCase(),
-      option: params.option,
-      side: params.side,
-      type: params.type,
+      market: marketNorm,
+      option,
+      side: sideEnum,
+      type: typeEnum,
       price: params.price,
-      amount: BigInt(params.amount),
+      amount: amountBi,
       filledAmount: 0n,
       nonce: params.nonce,
       expiry: params.expiry,
@@ -96,6 +137,52 @@ export class MatchingEngine extends EventEmitter {
     this.pendingCancels.push({ orderId, maker: maker.toLowerCase() });
   }
 
+  /**
+   * When a market stops trading, cancel all resting and queued orders and return locked collateral.
+   */
+  async cancelAllRestingAndPendingForMarket(market: string): Promise<void> {
+    const m = market.toLowerCase();
+    const kept: InternalOrder[] = [];
+    for (const order of this.pendingOrders) {
+      if (order.market === m) {
+        order.status = OrderStatus.CANCELLED;
+        await this.updateOrderStatus(order);
+        const released = await releaseFromOrders(order.maker, order.amount);
+        if (!released) {
+          console.error('[MatchingEngine] releaseFromOrders failed for pending order', order.id, order.maker);
+        }
+        this.emit('order_update', order);
+      } else {
+        kept.push(order);
+      }
+    }
+    this.pendingOrders = kept;
+
+    for (const option of [1, 2] as const) {
+      const book = this.books.get(m, option);
+      if (!book) continue;
+      const snapshotOrders = [...book.getAllOrders()];
+      for (const order of snapshotOrders) {
+        book.removeOrder(order.id);
+        order.status = OrderStatus.CANCELLED;
+        await this.updateOrderStatus(order);
+        const remaining = order.amount - order.filledAmount;
+        if (remaining > 0n) {
+          const released = await releaseFromOrders(order.maker, remaining);
+          if (!released) {
+            console.error('[MatchingEngine] releaseFromOrders failed for resting order', order.id);
+          }
+        }
+        this.emit('order_update', order);
+        this.emit('orderbook_update', {
+          market: m,
+          option,
+          snapshot: book.getSnapshot(),
+        });
+      }
+    }
+  }
+
   private async runCycle(): Promise<void> {
     // Step 1: Process cancels (cancel priority)
     const cancels = this.pendingCancels.splice(0);
@@ -111,7 +198,10 @@ export class MatchingEngine extends EventEmitter {
       if (order.expiry > 0 && Date.now() / 1000 > order.expiry) {
         order.status = OrderStatus.CANCELLED;
         await this.updateOrderStatus(order);
-        await releaseFromOrders(order.maker, order.amount);
+        const released = await releaseFromOrders(order.maker, order.amount);
+        if (!released) {
+          console.error('[MatchingEngine] releaseFromOrders failed (expired pending)', order.id);
+        }
         continue;
       }
       await this.matchOrder(order);
@@ -129,7 +219,10 @@ export class MatchingEngine extends EventEmitter {
         await this.updateOrderStatus(order);
         const remaining = order.amount - order.filledAmount;
         if (remaining > 0n) {
-          await releaseFromOrders(order.maker, remaining);
+          const released = await releaseFromOrders(order.maker, remaining);
+          if (!released) {
+            console.error('[MatchingEngine] releaseFromOrders failed (sweep)', order.id);
+          }
         }
         this.emit('order_update', order);
         this.emit('orderbook_update', {
@@ -153,7 +246,10 @@ export class MatchingEngine extends EventEmitter {
           await this.updateOrderStatus(removed);
           const remaining = removed.amount - removed.filledAmount;
           if (remaining > 0n) {
-            await releaseFromOrders(removed.maker, remaining);
+            const released = await releaseFromOrders(removed.maker, remaining);
+            if (!released) {
+              console.error('[MatchingEngine] releaseFromOrders failed (cancel)', orderId);
+            }
           }
           this.emit('order_update', removed);
           return;
@@ -208,7 +304,10 @@ export class MatchingEngine extends EventEmitter {
         order.status = OrderStatus.CANCELLED;
       }
       await this.updateOrderStatus(order);
-      await releaseFromOrders(order.maker, remaining);
+      const released = await releaseFromOrders(order.maker, remaining);
+      if (!released) {
+        console.error('[MatchingEngine] releaseFromOrders failed (market remainder)', order.id);
+      }
     }
 
     if (order.filledAmount > 0n) {
@@ -223,6 +322,34 @@ export class MatchingEngine extends EventEmitter {
     fillAmount: bigint,
     book: ReturnType<OrderBookManager['getOrCreate']>
   ): Promise<void> {
+    const platformFee = (fillAmount * BigInt(config.platformFeeBps)) / 10000n;
+    const makerFee = (fillAmount * BigInt(config.makerFeeBps)) / 10000n;
+
+    const [buyer, seller] =
+      taker.side === OrderSide.BUY
+        ? [taker, maker]
+        : [maker, taker];
+
+    const sellerReceives = fillAmount - platformFee - makerFee;
+
+    const settled = await settleFillBalances(
+      buyer.maker,
+      seller.maker,
+      this.platformFeeTreasury,
+      fillAmount,
+      platformFee,
+      sellerReceives,
+      makerFee
+    );
+    if (!settled) {
+      console.error('[MatchingEngine] settleFillBalances failed', {
+        buyer: buyer.maker,
+        seller: seller.maker,
+        fillAmount: fillAmount.toString(),
+      });
+      throw new Error('Settlement accounting failed');
+    }
+
     taker.filledAmount += fillAmount;
     maker.filledAmount += fillAmount;
 
@@ -239,15 +366,6 @@ export class MatchingEngine extends EventEmitter {
       taker.status = OrderStatus.PARTIALLY_FILLED;
     }
 
-    const totalFeeBps = config.platformFeeBps + config.makerFeeBps;
-    const platformFee = (fillAmount * BigInt(config.platformFeeBps)) / 10000n;
-    const makerFee = (fillAmount * BigInt(config.makerFeeBps)) / 10000n;
-
-    const [buyer, seller] =
-      taker.side === OrderSide.BUY
-        ? [taker, maker]
-        : [maker, taker];
-
     const trade: TradeResult = {
       id: uuidv4(),
       market: taker.market,
@@ -262,10 +380,6 @@ export class MatchingEngine extends EventEmitter {
       makerFee,
       timestamp: Date.now(),
     };
-
-    // Settle balances: buyer's locked funds go to seller (minus fees)
-    const sellerReceives = fillAmount - platformFee - makerFee;
-    await settleTrade(buyer.maker, seller.maker, sellerReceives, makerFee);
 
     await TradeModel.create({
       tradeId: trade.id,

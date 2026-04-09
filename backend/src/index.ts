@@ -34,7 +34,9 @@ async function main(): Promise<void> {
 
   // Core components
   const books = new OrderBookManager();
-  const engine = new MatchingEngine(books);
+  const feeTreasury =
+    config.feeTreasuryAddress || relayer.address.toLowerCase();
+  const engine = new MatchingEngine(books, { platformFeeTreasury: feeTreasury });
 
   const settlementService = new SettlementService(provider);
   const claimService = new ClaimService(provider);
@@ -55,7 +57,10 @@ async function main(): Promise<void> {
 
   // API routes
   app.use('/orders', createOrdersRouter(engine));
-  app.use('/markets', createMarketsRouter(books, claimService));
+  app.use(
+    '/markets',
+    createMarketsRouter(books, claimService, relayer.address)
+  );
   app.use('/orderbook', createOrderBookRouter(books));
   app.use('/positions', createPositionsRouter());
   app.use('/balance', createBalanceRouter(provider, relayer));
@@ -68,7 +73,13 @@ async function main(): Promise<void> {
   const wsServer = new WsServer(server, engine);
 
   const depositService = new DepositService(provider, relayer.address, wsServer);
-  const marketSyncer = new MarketSyncer(provider, books, claimService, wsServer);
+  const marketSyncer = new MarketSyncer(
+    provider,
+    books,
+    claimService,
+    wsServer,
+    engine
+  );
 
   // Start all services
   engine.start();

@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { ethers } from 'ethers';
+import { config } from '../config';
 import { MarketModel } from '../models/Market';
 import { TradeModel } from '../models/Trade';
 import { OrderBookManager } from '../engine/OrderBook';
@@ -6,6 +8,19 @@ import type { OrderBookSnapshot } from '../engine/types';
 import type { ClaimService } from '../services/ClaimService';
 import { parsePairQueryParam } from '../lib/pairs';
 import { enrichMarketLean } from '../lib/marketResponse';
+
+function authorizeClaim(req: Request, relayerAddress: string, marketAddress: string): boolean {
+  const admin = config.claimAdminApiKey;
+  if (admin && req.header('x-updown-admin-key') === admin) return true;
+  const sig = req.body?.signature;
+  if (!sig || typeof sig !== 'string') return false;
+  const msg = `updown:claim:${marketAddress.toLowerCase()}:${config.chainId}`;
+  try {
+    return ethers.verifyMessage(msg, sig).toLowerCase() === relayerAddress.toLowerCase();
+  } catch {
+    return false;
+  }
+}
 
 const ALLOWED_TIMEFRAMES = new Set([300, 900, 3600]);
 
@@ -21,7 +36,11 @@ function bestBidAsk(snapshot: OrderBookSnapshot): {
   };
 }
 
-export function createMarketsRouter(books: OrderBookManager, claimService: ClaimService): Router {
+export function createMarketsRouter(
+  books: OrderBookManager,
+  claimService: ClaimService,
+  relayerAddress: string
+): Router {
   const router = Router();
 
   router.get('/', async (req: Request, res: Response) => {
@@ -91,6 +110,10 @@ export function createMarketsRouter(books: OrderBookManager, claimService: Claim
   router.post('/:address/claim', async (req: Request, res: Response) => {
     try {
       const addr = (req.params.address as string).toLowerCase();
+      if (!authorizeClaim(req, relayerAddress, addr)) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
       await claimService.processResolvedMarket(addr);
       res.json({ ok: true });
     } catch (err) {

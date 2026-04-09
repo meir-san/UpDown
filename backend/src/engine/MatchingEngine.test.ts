@@ -45,6 +45,14 @@ jest.mock('../models/Trade', () => ({
   },
 }));
 
+jest.mock('../models/Market', () => ({
+  MarketModel: {
+    findOne: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ address: '0xpool1', status: 'ACTIVE' }),
+    }),
+  },
+}));
+
 jest.mock('../models/Balance', () => {
   const balances = new Map<string, { available: bigint; inOrders: bigint }>();
 
@@ -65,15 +73,33 @@ jest.mock('../models/Balance', () => {
     }),
     releaseFromOrders: jest.fn().mockImplementation(async (wallet: string, amount: bigint) => {
       const bal = getBalance(wallet);
+      if (bal.inOrders < amount) return false;
       bal.inOrders -= amount;
       bal.available += amount;
+      return true;
     }),
-    settleTrade: jest.fn().mockImplementation(async (buyer: string, seller: string, amount: bigint) => {
-      const buyerBal = getBalance(buyer);
-      buyerBal.inOrders -= amount;
-      const sellerBal = getBalance(seller);
-      sellerBal.available += amount;
-    }),
+    settleFillBalances: jest
+      .fn()
+      .mockImplementation(
+        async (
+          buyer: string,
+          seller: string,
+          treasury: string,
+          fillAmount: bigint,
+          platformFee: bigint,
+          sellerReceives: bigint,
+          makerFee: bigint
+        ) => {
+          const buyerBal = getBalance(buyer);
+          if (buyerBal.inOrders < fillAmount) return false;
+          buyerBal.inOrders -= fillAmount;
+          const sellerBal = getBalance(seller);
+          sellerBal.available += sellerReceives + makerFee;
+          const treasBal = getBalance(treasury);
+          treasBal.available += platformFee;
+          return true;
+        }
+      ),
     _reset: () => balances.clear(),
     _getBalance: getBalance,
   };
@@ -104,7 +130,7 @@ describe('MatchingEngine', () => {
   beforeEach(() => {
     _reset();
     books = new OrderBookManager();
-    engine = new MatchingEngine(books);
+    engine = new MatchingEngine(books, { platformFeeTreasury: '0xtreasury' });
   });
 
   afterEach(() => {

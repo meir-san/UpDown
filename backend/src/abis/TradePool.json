@@ -41,6 +41,20 @@
   },
   {
     "type": "function",
+    "name": "closePool",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "chooseWinner",
+    "inputs": [{ "name": "winnerOption", "type": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claim",
     "inputs": [],
     "outputs": [],

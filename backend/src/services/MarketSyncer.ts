@@ -3,6 +3,7 @@ import { config } from '../config';
 import { MarketModel } from '../models/Market';
 import { OrderBookManager } from '../engine/OrderBook';
 import { ClaimService } from './ClaimService';
+import type { MatchingEngine } from '../engine/MatchingEngine';
 import type { WsServer } from '../ws/WebSocketServer';
 import AutoCyclerAbi from '../abis/AutoCycler.json';
 import TradePoolAbi from '../abis/TradePool.json';
@@ -22,18 +23,21 @@ export class MarketSyncer {
   private books: OrderBookManager;
   private claimService: ClaimService;
   private ws: WsServer | null;
+  private engine: MatchingEngine;
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     provider: ethers.JsonRpcProvider,
     books: OrderBookManager,
     claimService: ClaimService,
-    ws: WsServer | null = null
+    ws: WsServer | null = null,
+    engine: MatchingEngine
   ) {
     this.provider = provider;
     this.books = books;
     this.claimService = claimService;
     this.ws = ws;
+    this.engine = engine;
   }
 
   start(): void {
@@ -134,7 +138,8 @@ export class MarketSyncer {
       symResolved === 'BTC-USD' || symResolved === 'ETH-USD' ? symResolved : 'OTHER';
     const pairLabel = pairSymbol === 'OTHER' ? pairIdHex : pairSymbol;
 
-    const prior = await MarketModel.findOne({ address: normalized }).select('address').lean();
+    const prior = await MarketModel.findOne({ address: normalized }).select('address status').lean();
+    const prevStatus = prior?.status as string | undefined;
 
     await MarketModel.findOneAndUpdate(
       { address: normalized },
@@ -153,6 +158,10 @@ export class MarketSyncer {
       },
       { upsert: true, new: true }
     );
+
+    if (status === 'TRADING_ENDED' && prevStatus === 'ACTIVE') {
+      await this.engine.cancelAllRestingAndPendingForMarket(normalized);
+    }
 
     if (!prior) {
       this.ws?.broadcastMarketEvent('market_created', {

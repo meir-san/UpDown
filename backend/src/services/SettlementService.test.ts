@@ -1,8 +1,14 @@
+jest.mock('../models/Balance', () => ({
+  reverseSettledFill: jest.fn().mockResolvedValue(true),
+}));
+
 jest.mock('../config', () => ({
   config: {
     relayerPrivateKey:
       '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
     usdtAddress: '0x0000000000000000000000000000000000000001',
+    feeTreasuryAddress: '',
+    chainId: 42161,
   },
   MAX_UINT256: BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'),
   OPTION_UP: 1,
@@ -28,7 +34,10 @@ describe('SettlementService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    enterOptionMock.mockResolvedValue({ hash: '0xenter', wait: jest.fn().mockResolvedValue({}) });
+    enterOptionMock.mockResolvedValue({
+      hash: '0xenter',
+      wait: jest.fn().mockResolvedValue({ status: 1, hash: '0xconfirmed' }),
+    });
 
     walletSpy = jest.spyOn(ethers, 'Wallet').mockImplementation(
       () =>

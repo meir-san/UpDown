@@ -14,8 +14,20 @@ export function createOrdersRouter(engine: MatchingEngine): Router {
       const { maker, market, option, side, type, price, amount, nonce, expiry, signature } =
         req.body;
 
-      if (!maker || !market || option == null || side == null || !amount || !signature) {
+      if (!maker || !market || option == null || side == null || amount == null || amount === '' || !signature) {
         res.status(400).json({ error: 'Missing required fields' });
+        return;
+      }
+
+      let amountBi: bigint;
+      try {
+        amountBi = BigInt(amount);
+      } catch {
+        res.status(400).json({ error: 'Invalid amount' });
+        return;
+      }
+      if (amountBi <= 0n) {
+        res.status(400).json({ error: 'Amount must be positive' });
         return;
       }
 
@@ -28,7 +40,7 @@ export function createOrdersRouter(engine: MatchingEngine): Router {
       const typeEnum: OrderType =
         type === 'MARKET' || type === 1 ? OrderType.MARKET : OrderType.LIMIT;
 
-      if (typeEnum === OrderType.LIMIT && (price == null || price <= 0 || price >= 10000)) {
+      if (typeEnum === OrderType.LIMIT && (price == null || price < 1 || price > 9999)) {
         res.status(400).json({ error: 'Limit orders require price between 1 and 9999 (basis points)' });
         return;
       }

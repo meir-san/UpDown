@@ -5,6 +5,8 @@ import { ProcessedDepositTxModel } from '../models/ProcessedDepositTx';
 import type { WsServer } from '../ws/WebSocketServer';
 import ERC20Abi from '../abis/ERC20.json';
 
+const USDT_LOWER = config.usdtAddress.toLowerCase();
+
 /**
  * Monitors USDT Transfer events to the relayer address.
  * On confirmed deposit, credits the sender's balance in MongoDB.
@@ -31,6 +33,11 @@ export class DepositService {
 
     this.usdtContract.on(filter, async (from: string, _to: string, value: bigint, event: ethers.EventLog) => {
       try {
+        const logAddr = (event as { address?: string }).address?.toLowerCase();
+        if (logAddr !== USDT_LOWER) {
+          return;
+        }
+
         const receipt = await this.provider.waitForTransaction(
           event.transactionHash,
           config.depositConfirmations
@@ -38,20 +45,21 @@ export class DepositService {
         if (!receipt || receipt.status !== 1) return;
 
         const txHash = event.transactionHash.toLowerCase();
-        try {
-          await ProcessedDepositTxModel.create({ txHash });
-        } catch (e: any) {
-          if (e.code === 11000) {
-            return;
-          }
-          throw e;
-        }
+        const existing = await ProcessedDepositTxModel.findOne({ txHash }).lean();
+        if (existing) return;
+
+        await creditBalance(from, value, 'totalDeposited');
 
         try {
-          await creditBalance(from, value, 'totalDeposited');
-        } catch (creditErr) {
-          await ProcessedDepositTxModel.deleteOne({ txHash }).catch(() => {});
-          throw creditErr;
+          await ProcessedDepositTxModel.create({ txHash });
+        } catch (e: unknown) {
+          const code = (e as { code?: number })?.code;
+          if (code === 11000) return;
+          console.error('[Deposit] Credited balance but failed to record tx; manual reconciliation may be needed', {
+            txHash,
+            err: e,
+          });
+          throw e;
         }
 
         const wallet = from.toLowerCase();
