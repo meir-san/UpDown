@@ -56,7 +56,12 @@ export function MarketPageClient({ address }: { address: string }) {
         </h1>
         <p className="mt-2 font-mono text-xs text-muted sm:text-sm">{market.address}</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <span className="rounded-[12px] bg-surface-muted px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-neutral-ink">
+          <span className={cn(
+            "rounded-[6px] px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
+            market.status === "ACTIVE"
+              ? "bg-success-soft text-success-dark"
+              : "bg-[rgba(104,107,130,0.12)] text-neutral-ink"
+          )}>
             {market.status}
           </span>
           <span className="text-sm text-muted">
@@ -88,15 +93,18 @@ export function MarketPageClient({ address }: { address: string }) {
           Your positions
         </h2>
         {!wallet && (
-          <EmptyState title="Connect to view positions">
-            Link your wallet to see holdings for this market. You can still browse markets and order
-            books without connecting.
-          </EmptyState>
+          <EmptyState
+            icon="wallet"
+            title="Connect to view positions"
+            subtitle="Link your wallet to see holdings for this market. You can still browse markets and order books without connecting."
+          />
         )}
         {wallet && localPositions.length === 0 && (
-          <EmptyState title="No position here">
-            You do not have an open position in this market yet. Place a trade using the form above.
-          </EmptyState>
+          <EmptyState
+            icon="trade"
+            title="No position here"
+            subtitle="You do not have an open position in this market yet. Place a trade using the form above."
+          />
         )}
         <ul className="space-y-3">
           {localPositions.map((p) => (

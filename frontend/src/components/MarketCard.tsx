@@ -46,12 +46,12 @@ export function MarketCard({ market }: { market: MarketListItem }) {
     <Link
       href={`/market/${market.address}`}
       className={cn(
-        "card-kraken block p-5 transition-shadow duration-200",
-        "hover:shadow-card-hover"
+        "card-kraken group block p-5 transition-all duration-200",
+        "hover:shadow-card-hover hover:border-brand/20"
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0">
           <p className="font-display text-lg font-bold text-foreground">
             {(market.pairSymbol ?? market.pairId).replace("-", " / ")}
           </p>
@@ -62,7 +62,7 @@ export function MarketCard({ market }: { market: MarketListItem }) {
         </div>
         <span
           className={cn(
-            "shrink-0 rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
+            "shrink-0 rounded-[6px] px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
             market.status === "ACTIVE"
               ? "bg-success-soft text-success-dark"
               : "bg-[rgba(104,107,130,0.12)] text-neutral-ink"
@@ -71,17 +71,20 @@ export function MarketCard({ market }: { market: MarketListItem }) {
           {market.status}
         </span>
       </div>
-      <div className="mt-5 flex items-end justify-between gap-4 border-t border-border pt-4 text-sm">
+      <div className="mt-4 flex items-end justify-between gap-4 border-t border-border pt-4 text-sm">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">Ends in</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Ends in</p>
           <p className="mt-1 font-mono text-xl font-bold tabular-nums text-brand">{cd}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">Pool</p>
-          <p className="mt-1 font-medium text-success">{bid}</p>
-          <p className="font-medium text-down">{ask}</p>
+          <p className="mt-1 text-sm font-semibold text-success">{bid}</p>
+          <p className="text-sm font-semibold text-down">{ask}</p>
         </div>
       </div>
+      {/* Hover hint */}
+      <p className="mt-3 text-center text-xs font-medium text-muted opacity-0 transition-opacity group-hover:opacity-100">
+        View market →
+      </p>
     </Link>
   );
 }

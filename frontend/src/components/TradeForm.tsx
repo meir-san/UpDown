@@ -105,9 +105,11 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
 
   if (!isConnected) {
     return (
-      <EmptyState title="Connect a wallet">
-        Connect with MetaMask or another wallet to place signed UP / DOWN orders on this market.
-      </EmptyState>
+      <EmptyState
+        icon="wallet"
+        title="Connect a wallet"
+        subtitle="Connect with MetaMask or another wallet to place signed UP / DOWN orders on this market."
+      />
     );
   }
 
@@ -178,7 +180,7 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
             <button
               key={p}
               type="button"
-              className="rounded-lg border border-border px-2 py-1 text-xs font-medium"
+              className="rounded-[12px] border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-brand hover:text-brand"
               onClick={() => setDollars(p)}
             >
               ${p}

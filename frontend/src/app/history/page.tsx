@@ -61,9 +61,11 @@ export default function HistoryPage() {
   if (!isConnected) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center">
-        <EmptyState title="Connect your wallet">
-          Your filled trades will appear here once you connect and trade.
-        </EmptyState>
+        <EmptyState
+          icon="wallet"
+          title="Connect your wallet"
+          subtitle="Your filled trades will appear here once you connect and trade."
+        />
       </div>
     );
   }
@@ -75,10 +77,11 @@ export default function HistoryPage() {
         <div className="py-12 text-center text-sm text-muted">Loading history…</div>
       )}
       {!isLoading && (!trades || trades.length === 0) && (
-        <EmptyState title="No trades yet">
-          Executed trades will show in this table with direction, size, and outcome hints after markets
-          resolve.
-        </EmptyState>
+        <EmptyState
+          icon="list"
+          title="No trades yet"
+          subtitle="Executed trades will show in this table with direction, size, and outcome hints after markets resolve."
+        />
       )}
       <div className="card-kraken overflow-hidden overflow-x-auto p-0">
         <table className="min-w-full text-left text-sm">
@@ -87,8 +90,8 @@ export default function HistoryPage() {
               <th className="px-4 py-3">Market</th>
               <th className="px-4 py-3">Dir</th>
               <th className="px-4 py-3">Amount</th>
-              <th className="px-4 py-3">Price</th>
-              <th className="px-4 py-3">Time</th>
+              <th className="hidden px-4 py-3 sm:table-cell">Price</th>
+              <th className="hidden px-4 py-3 md:table-cell">Time</th>
               <th className="px-4 py-3">Result</th>
             </tr>
           </thead>
@@ -114,8 +117,8 @@ export default function HistoryPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 font-mono text-foreground">{formatUsdt(t.amount)}</td>
-                <td className="px-4 py-3 font-medium text-foreground">{(t.price / 100).toFixed(2)}¢</td>
-                <td className="px-4 py-3 text-muted">
+                <td className="hidden px-4 py-3 font-medium text-foreground sm:table-cell">{(t.price / 100).toFixed(2)}¢</td>
+                <td className="hidden px-4 py-3 text-muted md:table-cell">
                   {new Date(t.createdAt).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-sm text-foreground">

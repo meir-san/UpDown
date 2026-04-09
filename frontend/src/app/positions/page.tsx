@@ -33,9 +33,11 @@ export default function PositionsPage() {
   if (!isConnected) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center">
-        <EmptyState title="Connect your wallet">
-          Connect with the button in the header to view your open positions and claim resolved markets.
-        </EmptyState>
+        <EmptyState
+          icon="wallet"
+          title="Connect your wallet"
+          subtitle="Connect with the button in the header to view your open positions and claim resolved markets."
+        />
       </div>
     );
   }
@@ -50,10 +52,11 @@ export default function PositionsPage() {
     <div className="space-y-8">
       <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Positions</h1>
       {!data?.length && (
-        <EmptyState title="No open positions">
-          When you buy UP or DOWN on a market, your exposure will show here. Browse markets from the home
-          page to get started.
-        </EmptyState>
+        <EmptyState
+          icon="trade"
+          title="No open positions"
+          subtitle="When you buy UP or DOWN on a market, your exposure will show here. Browse markets from the home page to get started."
+        />
       )}
       <ul className="space-y-4">
         {data?.map((p) => (
