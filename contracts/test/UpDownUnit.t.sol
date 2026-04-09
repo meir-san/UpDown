@@ -45,6 +45,25 @@ contract MockBtcFeed {
 }
 
 /// @notice chooseWinner always reverts (e.g. pool state prevents resolution).
+contract MockPoolWin {
+    uint256 private _endTime;
+    uint256 public winner;
+
+    constructor(uint256 endTime_) {
+        _endTime = endTime_;
+    }
+
+    function endTime() external view returns (uint256) {
+        return _endTime;
+    }
+
+    function closePool() external {}
+
+    function chooseWinner(uint256 option) external {
+        winner = option;
+    }
+}
+
 contract MockPoolChooseReverts {
     uint256 private _endTime;
 
@@ -109,6 +128,21 @@ contract UpDownUnit is Test {
         vm.warp(1_700_000_000);
     }
 
+    /// @dev Resolver uses strict `>` for UP; tie (`==`) goes to DOWN.
+    function test_resolveTieGoesDown() public {
+        MockSequencerUp seq = new MockSequencerUp(0, block.timestamp - 2 hours);
+        MockBtcFeed feed = new MockBtcFeed(50_000e8);
+        ChainlinkResolver r =
+            new ChainlinkResolver(owner, address(seq), BTCUSD, address(feed), bytes32(0), address(0));
+
+        MockPoolWin pool = new MockPoolWin(block.timestamp - 1);
+        r.registerMarket(address(pool), BTCUSD, 50_000e8);
+
+        r.resolve(address(pool));
+
+        assertEq(pool.winner(), r.OPTION_DOWN());
+    }
+
     function test_resolveChooseWinnerReverts() public {
         MockSequencerUp seq = new MockSequencerUp(0, block.timestamp - 2 hours);
         MockBtcFeed feed = new MockBtcFeed(50_000e8);
@@ -147,7 +181,8 @@ contract UpDownUnit is Test {
         assertEq(cycler.activeMarketCount(), 1);
 
         uint256[] memory empty = new uint256[](0);
-        cycler.performUpkeep(abi.encode(empty, empty));
+        UpDownAutoCycler.CreateSlot[] memory noCreates = new UpDownAutoCycler.CreateSlot[](0);
+        cycler.performUpkeep(abi.encode(empty, noCreates));
 
         assertEq(cycler.activeMarketCount(), 0, "prune should remove finalized pool");
     }
@@ -171,10 +206,10 @@ contract UpDownUnit is Test {
 
         vm.warp(block.timestamp + 400 days);
         uint256[] memory resolveEmpty = new uint256[](0);
-        uint256[] memory createAll = new uint256[](3);
-        createAll[0] = 0;
-        createAll[1] = 1;
-        createAll[2] = 2;
+        UpDownAutoCycler.CreateSlot[] memory createAll = new UpDownAutoCycler.CreateSlot[](3);
+        createAll[0] = UpDownAutoCycler.CreateSlot({pairId: BTCUSD, tfIdx: 0});
+        createAll[1] = UpDownAutoCycler.CreateSlot({pairId: BTCUSD, tfIdx: 1});
+        createAll[2] = UpDownAutoCycler.CreateSlot({pairId: BTCUSD, tfIdx: 2});
 
         cycler.performUpkeep(abi.encode(resolveEmpty, createAll));
 

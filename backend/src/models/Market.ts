@@ -2,7 +2,12 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IMarket extends Document {
   address: string;
+  /** Legacy display field; prefer `pairSymbol`. */
   pairId: string;
+  /** Stable API label: `BTC-USD` | `ETH-USD`. */
+  pairSymbol?: string;
+  /** `keccak256(utf8("BTC/USD"))` etc., 0x-prefixed lowercase. */
+  pairIdHex?: string;
   startTime: number;
   endTime: number;
   duration: number;
@@ -26,6 +31,8 @@ const MarketSchema = new Schema<IMarket>(
   {
     address: { type: String, required: true, unique: true, lowercase: true, index: true },
     pairId: { type: String, required: true },
+    pairSymbol: { type: String, index: true },
+    pairIdHex: { type: String, index: true },
     startTime: { type: Number, required: true },
     endTime: { type: Number, required: true },
     duration: { type: Number, required: true },

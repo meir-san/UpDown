@@ -50,9 +50,15 @@ export async function getConfig(): Promise<ApiConfig> {
   return parseJson<ApiConfig>(res);
 }
 
+export type PairSymbol = "BTC-USD" | "ETH-USD";
+
 export type MarketListItem = {
   address: string;
   pairId: string;
+  /** Preferred display / filter key from API */
+  pairSymbol?: string;
+  /** Spot chart symbol for price history proxy */
+  chartSymbol?: "BTC" | "ETH";
   startTime: number;
   endTime: number;
   duration: number;
@@ -64,8 +70,16 @@ export type MarketListItem = {
   volume: string;
 };
 
-export async function getMarkets(timeframe?: 300 | 900 | 3600): Promise<MarketListItem[]> {
-  const res = await fetch(url("/markets", timeframe ? { timeframe } : undefined));
+export async function getMarkets(
+  timeframe?: 300 | 900 | 3600,
+  pair?: PairSymbol
+): Promise<MarketListItem[]> {
+  const res = await fetch(
+    url("/markets", {
+      ...(timeframe ? { timeframe } : {}),
+      ...(pair ? { pair } : {}),
+    })
+  );
   return parseJson<MarketListItem[]>(res);
 }
 

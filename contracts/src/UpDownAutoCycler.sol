@@ -10,7 +10,7 @@ import {ChainlinkResolver} from "./ChainlinkResolver.sol";
 
 /// @title UpDownAutoCycler
 /// @notice Chainlink Automation-compatible keeper that auto-creates and auto-resolves
-///         RAIN UpDown prediction markets (BTC UP/DOWN) on 5, 15, and 60-minute cycles.
+///         RAIN UpDown prediction markets (e.g. BTC/USD, ETH/USD) on 5, 15, and 60-minute cycles.
 ///         Implements checkUpkeep / performUpkeep for Chainlink Automation.
 contract UpDownAutoCycler is Ownable {
     using SafeERC20 for IERC20;
@@ -20,8 +20,8 @@ contract UpDownAutoCycler is Ownable {
     error NothingToDo();
 
     // ── Events ──────────────────────────────────────────────────────────
-    event MarketCreated(address indexed pool, uint256 duration, int256 strikePrice);
-    event MarketCreationFailed(uint256 indexed timeframe, bytes reason);
+    event MarketCreated(address indexed pool, bytes32 indexed pairId, uint256 duration, int256 strikePrice);
+    event MarketCreationFailed(bytes32 indexed pairId, uint256 indexed timeframe, bytes reason);
     event ResolutionFailed(address indexed pool, bytes reason);
     event TimeframeToggled(uint256 indexed index, bool active);
     event SeedLiquidityUpdated(uint256 amount);
@@ -32,7 +32,6 @@ contract UpDownAutoCycler is Ownable {
         uint256 duration;
         uint256 disputeDuration;
         bool active;
-        uint256 lastCreated;
     }
 
     struct ActiveMarket {
@@ -41,8 +40,15 @@ contract UpDownAutoCycler is Ownable {
         bytes32 pairId;
     }
 
+    /// @dev Encoded in performData alongside resolve indices for market creation.
+    struct CreateSlot {
+        bytes32 pairId;
+        uint256 tfIdx;
+    }
+
     // ── Constants ───────────────────────────────────────────────────────
     bytes32 public constant BTCUSD = keccak256("BTC/USD");
+    bytes32 public constant ETHUSD = keccak256("ETH/USD");
     uint256 public constant NUM_TIMEFRAMES = 3;
 
     // ── State ───────────────────────────────────────────────────────────
@@ -54,6 +60,13 @@ contract UpDownAutoCycler is Ownable {
     TimeframeConfig[NUM_TIMEFRAMES] public timeframes;
     ActiveMarket[] internal _activeMarkets;
     mapping(bytes32 => bool) public supportedPairs;
+
+    /// @notice Pairs that receive new pools each cycle (owner extends via `addPair`).
+    bytes32[] internal _cyclingPairs;
+    mapping(bytes32 => bool) public isCyclingPair;
+
+    /// @notice Last `block.timestamp` when a market was created for (pairId, timeframeIndex).
+    mapping(bytes32 => mapping(uint256 => uint256)) public pairTfLastCreated;
 
     // ── Constructor ─────────────────────────────────────────────────────
     constructor(
@@ -69,15 +82,27 @@ contract UpDownAutoCycler is Ownable {
         seedLiquidity = _seedLiquidity;
 
         // QuickFire: 5 min, 10 min dispute
-        timeframes[0] = TimeframeConfig({duration: 300, disputeDuration: 600, active: true, lastCreated: 0});
+        timeframes[0] = TimeframeConfig({duration: 300, disputeDuration: 600, active: true});
         // PowerPlay: 15 min, 30 min dispute
-        timeframes[1] = TimeframeConfig({duration: 900, disputeDuration: 1800, active: true, lastCreated: 0});
+        timeframes[1] = TimeframeConfig({duration: 900, disputeDuration: 1800, active: true});
         // MasterMode: 60 min, 120 min dispute
-        timeframes[2] = TimeframeConfig({duration: 3600, disputeDuration: 7200, active: true, lastCreated: 0});
+        timeframes[2] = TimeframeConfig({duration: 3600, disputeDuration: 7200, active: true});
 
         supportedPairs[BTCUSD] = true;
+        isCyclingPair[BTCUSD] = true;
+        _cyclingPairs.push(BTCUSD);
 
         IERC20(_baseToken).forceApprove(_factory, type(uint256).max);
+    }
+
+    /// @notice Number of pairs that participate in automated market creation.
+    function cyclingPairCount() external view returns (uint256) {
+        return _cyclingPairs.length;
+    }
+
+    /// @notice Pair id at index in the cycling list (for indexers / backends).
+    function cyclingPairAt(uint256 index) external view returns (bytes32) {
+        return _cyclingPairs[index];
     }
 
     /// @notice Same layout as the default getter for a public array of structs.
@@ -102,35 +127,49 @@ contract UpDownAutoCycler is Ownable {
         }
 
         uint256 createCount;
-        for (uint256 i; i < NUM_TIMEFRAMES; ++i) {
-            TimeframeConfig storage tf = timeframes[i];
-            if (tf.active && block.timestamp >= tf.lastCreated + tf.duration) ++createCount;
+        uint256 nPairs = _cyclingPairs.length;
+        for (uint256 pi; pi < nPairs; ++pi) {
+            bytes32 pid = _cyclingPairs[pi];
+            if (!supportedPairs[pid]) continue;
+            for (uint256 ti; ti < NUM_TIMEFRAMES; ++ti) {
+                TimeframeConfig storage tft = timeframes[ti];
+                if (tft.active && block.timestamp >= pairTfLastCreated[pid][ti] + tft.duration) {
+                    ++createCount;
+                }
+            }
         }
 
         upkeepNeeded = resolveCount > 0 || createCount > 0;
 
         if (upkeepNeeded) {
             uint256[] memory resolveIndices = new uint256[](resolveCount);
-            uint256[] memory createIndices = new uint256[](createCount);
+            CreateSlot[] memory createSlots = new CreateSlot[](createCount);
 
             uint256 ri;
             for (uint256 i; i < marketsLen; ++i) {
                 if (block.timestamp >= _activeMarkets[i].endTime) resolveIndices[ri++] = i;
             }
+
             uint256 ci;
-            for (uint256 i; i < NUM_TIMEFRAMES; ++i) {
-                TimeframeConfig storage tf = timeframes[i];
-                if (tf.active && block.timestamp >= tf.lastCreated + tf.duration) createIndices[ci++] = i;
+            for (uint256 pi; pi < nPairs; ++pi) {
+                bytes32 pid = _cyclingPairs[pi];
+                if (!supportedPairs[pid]) continue;
+                for (uint256 ti; ti < NUM_TIMEFRAMES; ++ti) {
+                    TimeframeConfig storage tft = timeframes[ti];
+                    if (tft.active && block.timestamp >= pairTfLastCreated[pid][ti] + tft.duration) {
+                        createSlots[ci++] = CreateSlot({pairId: pid, tfIdx: ti});
+                    }
+                }
             }
 
-            performData = abi.encode(resolveIndices, createIndices);
+            performData = abi.encode(resolveIndices, createSlots);
         }
     }
 
     /// @notice Called on-chain by Chainlink Automation when checkUpkeep returns true.
     function performUpkeep(bytes calldata performData) external {
-        (uint256[] memory resolveIndices, uint256[] memory createIndices) =
-            abi.decode(performData, (uint256[], uint256[]));
+        (uint256[] memory resolveIndices, CreateSlot[] memory createSlots) =
+            abi.decode(performData, (uint256[], CreateSlot[]));
 
         // Phase A: resolve expired markets
         for (uint256 i; i < resolveIndices.length; ++i) {
@@ -141,10 +180,10 @@ contract UpDownAutoCycler is Ownable {
         }
 
         // Phase B: create new markets (external self-call so try/catch can recover)
-        for (uint256 i; i < createIndices.length; ++i) {
-            uint256 tfIdx = createIndices[i];
-            try this._createMarketExternal(tfIdx) {} catch (bytes memory reason) {
-                emit MarketCreationFailed(tfIdx, reason);
+        for (uint256 i; i < createSlots.length; ++i) {
+            CreateSlot memory slot = createSlots[i];
+            try this._createMarketExternal(slot.tfIdx, slot.pairId) {} catch (bytes memory reason) {
+                emit MarketCreationFailed(slot.pairId, slot.tfIdx, reason);
             }
         }
 
@@ -152,17 +191,20 @@ contract UpDownAutoCycler is Ownable {
     }
 
     /// @dev Callable only via `this` from performUpkeep so failures are catchable.
-    function _createMarketExternal(uint256 tfIdx) external {
+    function _createMarketExternal(uint256 tfIdx, bytes32 pairId) external {
         require(msg.sender == address(this), "only cycler");
-        _createMarket(tfIdx);
+        _createMarket(tfIdx, pairId);
     }
 
     // ── Internal ────────────────────────────────────────────────────────
 
-    function _createMarket(uint256 tfIdx) internal {
+    function _createMarket(uint256 tfIdx, bytes32 pairId) internal {
+        if (tfIdx >= NUM_TIMEFRAMES) revert InvalidTimeframeIndex();
+        if (!supportedPairs[pairId]) revert("pair not supported");
+
         TimeframeConfig storage tf = timeframes[tfIdx];
 
-        int256 strike = resolver.getPrice(BTCUSD);
+        int256 strike = resolver.getPrice(pairId);
 
         uint256 end = block.timestamp + tf.duration;
         uint256[] memory liqPct = new uint256[](2);
@@ -187,11 +229,11 @@ contract UpDownAutoCycler is Ownable {
 
         address pool = IFactory(factory).createPool(params);
 
-        resolver.registerMarket(pool, BTCUSD, strike);
-        _activeMarkets.push(ActiveMarket({pool: pool, endTime: end, pairId: BTCUSD}));
-        tf.lastCreated = block.timestamp;
+        resolver.registerMarket(pool, pairId, strike);
+        _activeMarkets.push(ActiveMarket({pool: pool, endTime: end, pairId: pairId}));
+        pairTfLastCreated[pairId][tfIdx] = block.timestamp;
 
-        emit MarketCreated(pool, tf.duration, strike);
+        emit MarketCreated(pool, pairId, tf.duration, strike);
     }
 
     // ── Owner: configuration ────────────────────────────────────────────
@@ -207,8 +249,13 @@ contract UpDownAutoCycler is Ownable {
         emit SeedLiquidityUpdated(amount);
     }
 
+    /// @notice Whitelist a pair and include it in automated cycling (idempotent for cycling list).
     function addPair(bytes32 pairId) external onlyOwner {
         supportedPairs[pairId] = true;
+        if (!isCyclingPair[pairId]) {
+            isCyclingPair[pairId] = true;
+            _cyclingPairs.push(pairId);
+        }
     }
 
     function setResolver(address _resolver) external onlyOwner {

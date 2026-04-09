@@ -94,6 +94,19 @@ export class WsServer {
     });
 
     console.log('[WebSocket] Server attached at /stream');
+
+    const pingMs = 25_000;
+    setInterval(() => {
+      for (const client of this.clients) {
+        if (client.ws.readyState === WebSocket.OPEN) {
+          try {
+            client.ws.ping();
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }, pingMs).unref?.();
   }
 
   broadcastMarketEvent(type: 'market_created' | 'market_resolved', data: any): void {

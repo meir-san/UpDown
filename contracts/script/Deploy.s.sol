@@ -58,6 +58,9 @@ contract DeployUpDown is Script {
         // 3. Authorize cycler on resolver
         resolver.setAuthorizedCaller(address(cycler), true);
 
+        // 3b. Cycle ETH/USD alongside BTC/USD (resolver already has ETH feed from constructor)
+        cycler.addPair(ETHUSD);
+
         // 4. Fund cycler with USDT (deployer must hold sufficient balance)
         if (totalSeed > 0) {
             IERC20(DEV_USDT).safeTransfer(address(cycler), totalSeed);

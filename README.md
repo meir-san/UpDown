@@ -21,6 +21,10 @@ Prediction markets on **Arbitrum** with an off-chain matching engine, EIP-712 si
 3. **Orders** are signed off-chain (EIP-712) and submitted to the API; the **matching engine** pairs resting liquidity.
 4. **Relayer** (configured on the server) submits batched on-chain operations; **USDT** and contract addresses come from backend config and env.
 
+### Funding
+
+The **official** way to fund trading balance is **USDT on Arbitrum**: send USDT to the **relayer address** returned by `GET /config` (`relayerAddress`). The indexer credits your balance after confirmations. **There is no Aqua or other cross-chain deposit path** in this product—document that for operators, testers, and bots alike.
+
 ---
 
 ## Prerequisites
@@ -50,7 +54,7 @@ cd backend
 npm install
 ```
 
-Create `backend/.env` (see [Backend environment variables](#backend-environment-variables)). Minimum required:
+Create `backend/.env` from [`backend/.env.example`](backend/.env.example) (see [Backend environment variables](#backend-environment-variables)). Minimum required:
 
 - `ARBITRUM_RPC_URL`
 - `RELAYER_PRIVATE_KEY`
@@ -70,7 +74,7 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env.local` (see [Frontend environment variables](#frontend-environment-variables)). At minimum set:
+Create `frontend/.env.local` from [`frontend/.env.local.example`](frontend/.env.local.example) (see [Frontend environment variables](#frontend-environment-variables)). At minimum set:
 
 - `NEXT_PUBLIC_ALCHEMY_API_KEY` — smart account / Alchemy transport
 - `NEXT_PUBLIC_API_BASE_URL` — if the API is not on `http://localhost:3001`
@@ -139,7 +143,7 @@ All paths are relative to the backend origin (e.g. `http://localhost:3001`).
 | Area | Examples |
 |------|----------|
 | Config | `GET /config` — chain, USDT, relayer, EIP-712 domain for signing |
-| Markets | `GET /markets`, `GET /markets/:address` |
+| Markets | `GET /markets` (optional `timeframe`, `pair` = `BTC-USD` or `ETH-USD`), `GET /markets/:address` |
 | Order book | `GET /orderbook/:marketId` |
 | Orders | `POST /orders` (submit signed order), cancel flows as implemented |
 | Positions | `GET /positions/:wallet` |
@@ -150,11 +154,27 @@ All paths are relative to the backend origin (e.g. `http://localhost:3001`).
 
 Exact request/response shapes match the TypeScript types in [`frontend/src/lib/api.ts`](frontend/src/lib/api.ts) and the routers under [`backend/src/routes/`](backend/src/routes/).
 
+More detail: [`docs/api.md`](docs/api.md) (rate limits, query params).
+
+---
+
+## Bots & SDKs
+
+TypeScript and Python clients live under [`sdk/typescript/`](sdk/typescript/) and [`sdk/python/`](sdk/python/). Operator notes: [`docs/bots/README.md`](docs/bots/README.md).
+
 ---
 
 ## WebSocket
 
-Connect to `ws://<host>:<port>/stream` (or `wss://` in production). The server pushes order book, balance, and related events so the UI can update without polling.
+Connect to `ws://<host>:<port>/stream` (or `wss://` in production). The server pushes order book, balance, and related events so the UI can update without polling. Channel list and bot guidance: [`docs/bots/README.md`](docs/bots/README.md).
+
+---
+
+## Operations & testing
+
+- Runbook (automation, monitoring, prod address hints): [`docs/operations.md`](docs/operations.md)
+- Manual E2E checklist (relayer deposit path): [`docs/e2e-checklist.md`](docs/e2e-checklist.md)
+- On-chain ops (feeds, `addPair`): [`contracts/docs/ONCHAIN_OPERATIONS.md`](contracts/docs/ONCHAIN_OPERATIONS.md)
 
 ---
 
@@ -190,6 +210,7 @@ Relevant code: [`frontend/src/context/WalletContext.tsx`](frontend/src/context/W
 | `npm run build` | Production build |
 | `npm start` | Production server |
 | `npm run lint` | ESLint |
+| `npm run test:e2e` | Playwright API smoke (`/health`, `/markets?pair=…`) — start the backend first |
 
 ---
 

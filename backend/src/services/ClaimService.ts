@@ -35,17 +35,26 @@ export class ClaimService {
     if (winningOption === 0) return;
 
     if (!market.claimedByRelayer) {
-      try {
-        const tx = await pool.claim();
-        await tx.wait();
-        console.log(`[Claim] Claimed from pool ${marketAddress} (tx: ${tx.hash})`);
-      } catch (err: any) {
-        if (!err.message?.includes('AlreadyClaimed')) {
-          console.error(`[Claim] Failed to claim from ${marketAddress}:`, err);
-          return;
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      let claimed = false;
+      for (let attempt = 0; attempt < 3 && !claimed; attempt++) {
+        try {
+          const tx = await pool.claim();
+          await tx.wait();
+          console.log(`[Claim] Claimed from pool ${marketAddress} (tx: ${tx.hash})`);
+          claimed = true;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('AlreadyClaimed')) {
+            console.log(`[Claim] Already claimed from ${marketAddress}`);
+            claimed = true;
+            break;
+          }
+          console.error(`[Claim] Claim attempt ${attempt + 1}/3 failed for ${marketAddress}:`, err);
+          if (attempt < 2) await sleep(1000 * 2 ** attempt);
         }
-        console.log(`[Claim] Already claimed from ${marketAddress}`);
       }
+      if (!claimed) return;
 
       await MarketModel.updateOne(
         { _id: market._id, claimedByRelayer: false },

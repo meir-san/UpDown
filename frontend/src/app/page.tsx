@@ -1,15 +1,20 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getMarkets, getStats } from "@/lib/api";
+import { getMarkets, getStats, type PairSymbol } from "@/lib/api";
 import { formatUsdt } from "@/lib/format";
 import { MarketCard } from "@/components/MarketCard";
 import { EmptyState } from "@/components/EmptyState";
 
 const SECTIONS = [
-  { title: "QuickFire", subtitle: "300s markets", tf: 300 as const },
-  { title: "PowerPlay", subtitle: "900s markets", tf: 900 as const },
-  { title: "MasterMode", subtitle: "3600s markets", tf: 3600 as const },
+  { title: "QuickFire", subtitle: "5 min markets", tf: 300 as const },
+  { title: "PowerPlay", subtitle: "15 min markets", tf: 900 as const },
+  { title: "MasterMode", subtitle: "60 min markets", tf: 3600 as const },
+];
+
+const PAIR_ROWS: { pair: PairSymbol; label: string }[] = [
+  { pair: "BTC-USD", label: "BTC / USD" },
+  { pair: "ETH-USD", label: "ETH / USD" },
 ];
 
 export default function HomePage() {
@@ -66,17 +71,30 @@ export default function HomePage() {
             </h2>
             <p className="mt-1 text-sm font-medium text-muted">{s.subtitle}</p>
           </div>
-          <MarketSection timeframe={s.tf} />
+          <div className="space-y-10">
+            {PAIR_ROWS.map((row) => (
+              <div key={row.pair}>
+                <h3 className="mb-4 font-display text-lg font-bold text-foreground">{row.label}</h3>
+                <MarketSection timeframe={s.tf} pair={row.pair} />
+              </div>
+            ))}
+          </div>
         </section>
       ))}
     </div>
   );
 }
 
-function MarketSection({ timeframe }: { timeframe: 300 | 900 | 3600 }) {
+function MarketSection({
+  timeframe,
+  pair,
+}: {
+  timeframe: 300 | 900 | 3600;
+  pair: PairSymbol;
+}) {
   const { data, isLoading } = useQuery({
-    queryKey: ["markets", timeframe],
-    queryFn: () => getMarkets(timeframe),
+    queryKey: ["markets", timeframe, pair],
+    queryFn: () => getMarkets(timeframe, pair),
     refetchInterval: 15_000,
   });
 
@@ -90,9 +108,9 @@ function MarketSection({ timeframe }: { timeframe: 300 | 900 | 3600 }) {
 
   if (!data?.length) {
     return (
-      <EmptyState title="No markets">
-        Nothing listed for this timeframe yet. If the backend syncer is running, new pools will appear
-        here automatically.
+      <EmptyState title={`No ${pair} markets`}>
+        No pools for this pair and timeframe yet. Ensure the auto-cycler lists this pair on-chain and the
+        backend syncer is running.
       </EmptyState>
     );
   }

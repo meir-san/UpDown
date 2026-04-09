@@ -4,6 +4,8 @@ import { TradeModel } from '../models/Trade';
 import { OrderBookManager } from '../engine/OrderBook';
 import type { OrderBookSnapshot } from '../engine/types';
 import type { ClaimService } from '../services/ClaimService';
+import { parsePairQueryParam } from '../lib/pairs';
+import { enrichMarketLean } from '../lib/marketResponse';
 
 const ALLOWED_TIMEFRAMES = new Set([300, 900, 3600]);
 
@@ -39,28 +41,45 @@ export function createMarketsRouter(books: OrderBookManager, claimService: Claim
         durationFilter = n;
       }
 
+      const rawPair = typeof req.query.pair === 'string' ? req.query.pair : undefined;
+      const pairSymbol = parsePairQueryParam(rawPair);
+      if (rawPair !== undefined && rawPair !== '' && pairSymbol === undefined) {
+        res.status(400).json({
+          error: 'Invalid pair',
+          allowed: ['BTC-USD', 'ETH-USD', 'btc-usd', 'eth-usd'],
+        });
+        return;
+      }
+
       const filter: Record<string, unknown> = {
         status: { $in: ['ACTIVE', 'TRADING_ENDED', 'RESOLVED'] },
       };
       if (durationFilter !== undefined) {
         filter.duration = durationFilter;
       }
+      if (pairSymbol !== undefined) {
+        filter.$or = [{ pairSymbol }, { pairId: pairSymbol }];
+      }
 
       const markets = await MarketModel.find(filter).sort({ endTime: -1 }).lean();
 
-      const result = markets.map((m) => ({
-        address: m.address,
-        pairId: m.pairId,
-        startTime: m.startTime,
-        endTime: m.endTime,
-        duration: m.duration,
-        status: m.status,
-        winner: m.winner,
-        upPrice: m.upPrice,
-        downPrice: m.downPrice,
-        strikePrice: m.strikePrice ?? '',
-        volume: m.volume,
-      }));
+      const result = markets.map((m) =>
+        enrichMarketLean({
+          address: m.address,
+          pairId: m.pairId,
+          pairSymbol: m.pairSymbol,
+          pairIdHex: m.pairIdHex,
+          startTime: m.startTime,
+          endTime: m.endTime,
+          duration: m.duration,
+          status: m.status,
+          winner: m.winner,
+          upPrice: m.upPrice,
+          downPrice: m.downPrice,
+          strikePrice: m.strikePrice ?? '',
+          volume: m.volume,
+        })
+      );
 
       res.json(result);
     } catch (err) {
@@ -106,8 +125,13 @@ export function createMarketsRouter(books: OrderBookManager, claimService: Claim
         down: bestBidAsk(snap.down),
       };
 
-      res.json({
+      const base = enrichMarketLean({
         ...market,
+        volume: market.volume,
+      });
+
+      res.json({
+        ...base,
         volume: volume.toString(),
         timeRemainingSeconds,
         orderBook,

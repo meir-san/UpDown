@@ -6,6 +6,7 @@ import { ClaimService } from './ClaimService';
 import type { WsServer } from '../ws/WebSocketServer';
 import AutoCyclerAbi from '../abis/AutoCycler.json';
 import TradePoolAbi from '../abis/TradePool.json';
+import { pairSymbolFromPairHash, type PairSymbol } from '../lib/pairs';
 
 const RESOLVER_MARKETS_IFACE = new ethers.Interface([
   'function markets(address pool) view returns (bytes32 pairId, int256 strikePrice, bool resolved)',
@@ -127,13 +128,21 @@ export class MarketSyncer {
       status = 'TRADING_ENDED';
     }
 
+    const pairIdHex = ethers.zeroPadValue(pairId as `0x${string}`, 32).toLowerCase();
+    const symResolved = pairSymbolFromPairHash(pairIdHex);
+    const pairSymbol: PairSymbol | 'OTHER' =
+      symResolved === 'BTC-USD' || symResolved === 'ETH-USD' ? symResolved : 'OTHER';
+    const pairLabel = pairSymbol === 'OTHER' ? pairIdHex : pairSymbol;
+
     const prior = await MarketModel.findOne({ address: normalized }).select('address').lean();
 
     await MarketModel.findOneAndUpdate(
       { address: normalized },
       {
         address: normalized,
-        pairId: ethers.decodeBytes32String(pairId).replace(/\0/g, '') || pairId,
+        pairId: pairLabel,
+        pairSymbol: pairSymbol === 'OTHER' ? undefined : pairSymbol,
+        pairIdHex,
         startTime,
         endTime,
         duration: endTime - startTime,
@@ -148,7 +157,8 @@ export class MarketSyncer {
     if (!prior) {
       this.ws?.broadcastMarketEvent('market_created', {
         address: normalized,
-        pairId: ethers.decodeBytes32String(pairId).replace(/\0/g, '') || pairId,
+        pairId: pairLabel,
+        pairSymbol: pairSymbol === 'OTHER' ? undefined : pairSymbol,
         endTime,
         duration: endTime - startTime,
         strikePrice,

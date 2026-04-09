@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useSetAtom } from "jotai";
 import { useQueryClient } from "@tanstack/react-query";
-import { wsConnectedAtom } from "@/store/atoms";
+import { wsConnectedAtom, wsLastEventAtAtom } from "@/store/atoms";
 import { wsStreamUrl } from "@/lib/env";
 import type { BalanceResponse, OrderBookResponse } from "@/lib/api";
 
@@ -25,6 +25,7 @@ export function useUpDownWebSocket(opts: {
   const { wallet, marketAddress, enabled = true } = opts;
   const queryClient = useQueryClient();
   const setWsConnected = useSetAtom(wsConnectedAtom);
+  const setWsLastEventAt = useSetAtom(wsLastEventAtAtom);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -53,11 +54,12 @@ export function useUpDownWebSocket(opts: {
             queryClient.invalidateQueries({ queryKey: ["market", marketAddress.toLowerCase()] });
           }
         }
+        setWsLastEventAt(Date.now());
       } catch {
         /* ignore */
       }
     },
-    [queryClient, wallet, marketAddress]
+    [queryClient, wallet, marketAddress, setWsLastEventAt]
   );
 
   useEffect(() => {
@@ -88,8 +90,10 @@ export function useUpDownWebSocket(opts: {
 
       ws.onclose = () => {
         setWsConnected(false);
-        const delay = Math.min(30_000, 1000 * 2 ** reconnectRef.current);
+        const attempt = reconnectRef.current;
         reconnectRef.current += 1;
+        const exp = Math.min(30_000, 1000 * 2 ** Math.min(attempt, 5));
+        const delay = attempt > 12 ? 30_000 : exp;
         timerRef.current = setTimeout(connect, delay);
       };
 

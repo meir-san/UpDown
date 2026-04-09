@@ -4,6 +4,7 @@ node_modules/
 
 # Build / artifacts
 backend/dist/
+sdk/typescript/dist/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
@@ -12,6 +13,14 @@ contracts/broadcast/
 .env
 .env.*
 !.env.example
+!.env.*.example
+
+# Python
+.venv/
+**/.venv/
+**/__pycache__/
+*.pyc
+*.egg-info/
 
 # OS / IDE
 .DS_Store

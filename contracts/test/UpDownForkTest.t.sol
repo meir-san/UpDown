@@ -183,12 +183,12 @@ contract UpDownForkTest is Test {
     // ── Test: toggleTimeframe works ─────────────────────────────────────
     function test_toggleTimeframe() public {
         cycler.toggleTimeframe(0, false);
-        (uint256 dur,, bool active,) = cycler.timeframes(0);
+        (uint256 dur,, bool active) = cycler.timeframes(0);
         assertFalse(active, "timeframe 0 should be inactive");
         assertEq(dur, 300, "duration should still be 300");
 
         cycler.toggleTimeframe(0, true);
-        (,, active,) = cycler.timeframes(0);
+        (,, active) = cycler.timeframes(0);
         assertTrue(active, "timeframe 0 should be active again");
     }
 

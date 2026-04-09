@@ -8,6 +8,7 @@ import { getConfig, getMarket, postOrder } from "@/lib/api";
 import { buildOrderTypedData } from "@/lib/eip712";
 import { parseUsdtToAtomic, formatUsdt } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { formatUserFacingError } from "@/lib/errors";
 import { EmptyState } from "@/components/EmptyState";
 
 const PRESETS = [5, 25, 50, 100, 500];
@@ -99,7 +100,7 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
       qc.invalidateQueries({ queryKey: ["balance", address?.toLowerCase()] });
       qc.invalidateQueries({ queryKey: ["orderbook", marketAddress.toLowerCase()] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(formatUserFacingError(e)),
   });
 
   if (!isConnected) {

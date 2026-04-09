@@ -4,11 +4,12 @@ import { OrderSide, OrderType } from '../engine/types';
 import { verifyOrderSignature, verifyCancelSignature } from '../services/SignatureService';
 import { MarketModel } from '../models/Market';
 import { OrderModel } from '../models/Order';
+import { ordersWriteLimiter } from '../middleware/rateLimit';
 
 export function createOrdersRouter(engine: MatchingEngine): Router {
   const router = Router();
 
-  router.post('/', async (req: Request, res: Response) => {
+  router.post('/', ordersWriteLimiter, async (req: Request, res: Response) => {
     try {
       const { maker, market, option, side, type, price, amount, nonce, expiry, signature } =
         req.body;
@@ -97,7 +98,7 @@ export function createOrdersRouter(engine: MatchingEngine): Router {
     }
   });
 
-  router.delete('/:id', async (req: Request, res: Response) => {
+  router.delete('/:id', ordersWriteLimiter, async (req: Request, res: Response) => {
     try {
       const id = req.params.id as string;
       const { maker, signature } = req.body;

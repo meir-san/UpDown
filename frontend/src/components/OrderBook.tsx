@@ -1,8 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useAtomValue } from "jotai";
 import { getOrderbook, type OrderBookResponse } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { wsConnectedAtom, wsLastEventAtAtom } from "@/store/atoms";
+
+const STALE_MS = 30_000;
 
 function SideTable({
   title,
@@ -80,11 +85,28 @@ function SideTable({
 }
 
 export function OrderBookPanel({ marketId }: { marketId: string }) {
+  const wsConnected = useAtomValue(wsConnectedAtom);
+  const wsLastEventAt = useAtomValue(wsLastEventAtAtom);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+
   const { data, isLoading } = useQuery({
     queryKey: ["orderbook", marketId.toLowerCase()],
     queryFn: () => getOrderbook(marketId),
     refetchInterval: 20_000,
+    refetchOnWindowFocus: true,
   });
+
+  const staleHint =
+    wsConnected && wsLastEventAt != null && now - wsLastEventAt > STALE_MS
+      ? "No live book updates for a while — data may lag; reconnecting in the background."
+      : !wsConnected
+        ? "WebSocket disconnected — showing periodic REST snapshots."
+        : null;
 
   if (isLoading || !data) {
     return (
@@ -95,9 +117,16 @@ export function OrderBookPanel({ marketId }: { marketId: string }) {
   }
 
   return (
-    <div className="grid gap-5 md:grid-cols-2">
-      <SideTable title="UP · Option 1" snapshot={data.up} accent="up" />
-      <SideTable title="DOWN · Option 2" snapshot={data.down} accent="down" />
+    <div className="space-y-3">
+      {staleHint ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          {staleHint}
+        </p>
+      ) : null}
+      <div className="grid gap-5 md:grid-cols-2">
+        <SideTable title="UP · Option 1" snapshot={data.up} accent="up" />
+        <SideTable title="DOWN · Option 2" snapshot={data.down} accent="down" />
+      </div>
     </div>
   );
 }

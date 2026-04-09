@@ -52,7 +52,7 @@ export function MarketPageClient({ address }: { address: string }) {
       </Link>
       <div>
         <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          {market.pairId}
+          {(market.pairSymbol ?? market.pairId).replace("-", " / ")}
         </h1>
         <p className="mt-2 font-mono text-xs text-muted sm:text-sm">{market.address}</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -70,7 +70,7 @@ export function MarketPageClient({ address }: { address: string }) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <TradingChart symbol="BTC" />
+        <TradingChart symbol={market.chartSymbol === "ETH" ? "ETH" : "BTC"} />
         <TradeForm marketAddress={address} />
       </div>
 

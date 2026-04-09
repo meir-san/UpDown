@@ -52,7 +52,9 @@ export function MarketCard({ market }: { market: MarketListItem }) {
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-display text-lg font-bold text-foreground">{market.pairId}</p>
+          <p className="font-display text-lg font-bold text-foreground">
+            {(market.pairSymbol ?? market.pairId).replace("-", " / ")}
+          </p>
           <p className="mt-1 text-xs text-muted">
             Strike{" "}
             <span className="font-semibold text-foreground">{strike}</span>

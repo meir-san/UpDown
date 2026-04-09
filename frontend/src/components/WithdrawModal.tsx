@@ -8,6 +8,7 @@ import { getBalance, getConfig, postWithdraw } from "@/lib/api";
 import { buildWithdrawTypedData } from "@/lib/eip712";
 import { parseUsdtToAtomic } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { formatUserFacingError } from "@/lib/errors";
 
 type Props = {
   open: boolean;
@@ -56,7 +57,7 @@ export function WithdrawModal({ open, onClose }: Props) {
       qc.invalidateQueries({ queryKey: ["balance", address?.toLowerCase()] });
       onClose();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(formatUserFacingError(e)),
   });
 
   if (!open) return null;

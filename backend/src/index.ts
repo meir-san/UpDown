@@ -21,6 +21,7 @@ import { createPricesRouter } from './routes/prices';
 import { createTradesRouter } from './routes/trades';
 import { createStatsRouter } from './routes/stats';
 import { createConfigRouter } from './routes/config';
+import { apiLimiter } from './middleware/rateLimit';
 
 async function main(): Promise<void> {
   // Connect to MongoDB
@@ -43,10 +44,12 @@ async function main(): Promise<void> {
   app.use(cors());
   app.use(express.json());
 
-  // Health check
+  // Health check (excluded from API rate limit for probes)
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', relayer: relayer.address, uptime: process.uptime() });
   });
+
+  app.use(apiLimiter);
 
   app.use('/config', createConfigRouter(relayer.address));
 
