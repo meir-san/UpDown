@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getMarkets, getStats } from "@/lib/api";
 import { formatUsdt } from "@/lib/format";
 import { MarketCard } from "@/components/MarketCard";
+import { EmptyState } from "@/components/EmptyState";
 
 const SECTIONS = [
   { title: "QuickFire", subtitle: "300s markets", tf: 300 as const },
@@ -19,41 +20,51 @@ export default function HomePage() {
   });
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       <div>
         <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           UpDown markets
         </h1>
-        <p className="mt-2 max-w-2xl text-muted">
+        <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
           Trade UP / DOWN on short-lived pools. Connect, deposit USDT to the relayer, and place signed
-          orders. Balances and markets update over WebSocket when connected, with REST polling as fallback.
+          orders. Markets and balances refresh over WebSocket when available, with REST polling as a
+          fallback.
         </p>
       </div>
 
       {stats && (
-        <div className="flex flex-wrap gap-4 rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-card)]">
+        <div className="card-kraken flex flex-wrap gap-8 px-6 py-5">
           <div>
-            <p className="text-xs text-muted">Volume (USDT atomic)</p>
-            <p className="font-mono text-lg font-bold text-foreground">{formatUsdt(stats.totalVolume)}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Protocol volume</p>
+            <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">
+              ${formatUsdt(stats.totalVolume)}
+            </p>
+            <p className="mt-0.5 text-xs text-muted">USDT (display)</p>
           </div>
+          <div className="h-auto w-px bg-border" aria-hidden />
           <div>
-            <p className="text-xs text-muted">Active markets</p>
-            <p className="font-mono text-lg font-bold text-foreground">{stats.activeMarketsCount}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Active markets</p>
+            <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-brand">
+              {stats.activeMarketsCount}
+            </p>
           </div>
+          <div className="h-auto w-px bg-border" aria-hidden />
           <div>
-            <p className="text-xs text-muted">Traders</p>
-            <p className="font-mono text-lg font-bold text-foreground">{stats.totalTraders}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Traders</p>
+            <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">
+              {stats.totalTraders}
+            </p>
           </div>
         </div>
       )}
 
       {SECTIONS.map((s) => (
         <section key={s.tf}>
-          <div className="mb-4 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="font-display text-2xl font-bold text-foreground">{s.title}</h2>
-              <p className="text-sm text-muted">{s.subtitle}</p>
-            </div>
+          <div className="mb-5 border-b border-border pb-3">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              {s.title}
+            </h2>
+            <p className="mt-1 text-sm font-medium text-muted">{s.subtitle}</p>
           </div>
           <MarketSection timeframe={s.tf} />
         </section>
@@ -70,15 +81,24 @@ function MarketSection({ timeframe }: { timeframe: 300 | 900 | 3600 }) {
   });
 
   if (isLoading) {
-    return <p className="text-sm text-muted">Loading markets…</p>;
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-surface-muted/50 py-16 text-center text-sm text-muted">
+        Loading markets…
+      </div>
+    );
   }
 
   if (!data?.length) {
-    return <p className="text-sm text-muted">No markets in this timeframe (syncer may be idle).</p>;
+    return (
+      <EmptyState title="No markets">
+        Nothing listed for this timeframe yet. If the backend syncer is running, new pools will appear
+        here automatically.
+      </EmptyState>
+    );
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
       {data.map((m) => (
         <MarketCard key={m.address} market={m} />
       ))}

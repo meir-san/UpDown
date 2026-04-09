@@ -28,7 +28,7 @@ function bestFromList(m: MarketListItem): { bid: string; ask: string } {
     if (!Number.isFinite(upP) || !Number.isFinite(downP)) return { bid: "—", ask: "—" };
     const upC = `${(upP * 100).toFixed(1)}¢`;
     const downC = `${(downP * 100).toFixed(1)}¢`;
-    return { bid: `UP ${upC}`, ask: `DN ${downC}` };
+    return { bid: `UP ${upC}`, ask: `DOWN ${downC}` };
   } catch {
     return { bid: "—", ask: "—" };
   }
@@ -46,37 +46,38 @@ export function MarketCard({ market }: { market: MarketListItem }) {
     <Link
       href={`/market/${market.address}`}
       className={cn(
-        "block rounded-xl border border-border bg-white p-4 transition-shadow",
-        "shadow-[var(--shadow-card)] hover:shadow-md"
+        "card-kraken block p-5 transition-shadow duration-200",
+        "hover:shadow-card-hover"
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-display text-lg font-bold text-foreground">{market.pairId}</p>
           <p className="mt-1 text-xs text-muted">
-            Strike <span className="font-medium text-foreground">{strike}</span>
+            Strike{" "}
+            <span className="font-semibold text-foreground">{strike}</span>
           </p>
         </div>
         <span
           className={cn(
-            "shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold",
+            "shrink-0 rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
             market.status === "ACTIVE"
-              ? "bg-[rgba(20,158,97,0.16)] text-success-dark"
-              : "bg-[rgba(104,107,130,0.12)] text-[#484b5e]"
+              ? "bg-success-soft text-success-dark"
+              : "bg-[rgba(104,107,130,0.12)] text-neutral-ink"
           )}
         >
           {market.status}
         </span>
       </div>
-      <div className="mt-4 flex items-center justify-between text-sm">
+      <div className="mt-5 flex items-end justify-between gap-4 border-t border-border pt-4 text-sm">
         <div>
-          <p className="text-xs text-muted">Ends in</p>
-          <p className="font-mono text-base font-semibold text-foreground">{cd}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">Ends in</p>
+          <p className="mt-1 font-mono text-xl font-bold tabular-nums text-brand">{cd}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-muted">Pool prices</p>
-          <p className="text-sm text-foreground">{bid}</p>
-          <p className="text-sm text-foreground">{ask}</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">Pool</p>
+          <p className="mt-1 font-medium text-success">{bid}</p>
+          <p className="font-medium text-down">{ask}</p>
         </div>
       </div>
     </Link>

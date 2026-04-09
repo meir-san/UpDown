@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
-import { useSignTypedData } from "@account-kit/react";
+import { useAccount, useSignTypedData } from "wagmi";
 import { toast } from "sonner";
 import { getBalance, getConfig, postWithdraw } from "@/lib/api";
 import { buildWithdrawTypedData } from "@/lib/eip712";
@@ -21,7 +20,7 @@ export function WithdrawModal({ open, onClose }: Props) {
   const { address, isConnected } = useAccount({ config: wagmiConfig });
   const [amountStr, setAmountStr] = useState("");
   const qc = useQueryClient();
-  const { signTypedDataAsync } = useSignTypedData({ client: undefined });
+  const { signTypedDataAsync } = useSignTypedData();
 
   const { data: cfg } = useQuery({
     queryKey: ["apiConfig"],
@@ -47,7 +46,7 @@ export function WithdrawModal({ open, onClose }: Props) {
         amount,
         BigInt(bal.withdrawNonce)
       );
-      const signature = await signTypedDataAsync({ typedData: typed });
+      const signature = await signTypedDataAsync(typed);
       await postWithdraw({
         wallet: address,
         amount: amount.toString(),
@@ -66,13 +65,8 @@ export function WithdrawModal({ open, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-[#101114]/40" aria-label="Close" onClick={onClose} />
-      <div
-        className={cn(
-          "relative z-10 w-full max-w-md rounded-xl bg-white p-6",
-          "shadow-[var(--shadow-card)]"
-        )}
-      >
+      <button type="button" className="absolute inset-0 bg-overlay" aria-label="Close" onClick={onClose} />
+      <div className={cn("card-kraken relative z-10 w-full max-w-md p-6 shadow-card-hover")}>
         <h2 className="font-display text-xl font-bold text-foreground">Withdraw USDT</h2>
         <p className="mt-2 text-sm text-muted">Sign the withdrawal message; the relayer sends USDT on-chain.</p>
         <label className="mt-4 block text-xs font-medium text-muted">Amount (USDT)</label>
@@ -90,16 +84,12 @@ export function WithdrawModal({ open, onClose }: Props) {
         <button
           type="button"
           disabled={withdraw.isPending || !isConnected}
-          className="mt-6 w-full rounded-[12px] bg-brand py-[13px] text-base font-semibold text-white disabled:opacity-50"
+          className="btn-primary mt-6 w-full disabled:opacity-50"
           onClick={() => withdraw.mutate()}
         >
           {withdraw.isPending ? "Signing…" : "Withdraw"}
         </button>
-        <button
-          type="button"
-          className="mt-3 w-full rounded-[12px] border border-brand-dark py-3 text-base font-medium text-brand-dark"
-          onClick={onClose}
-        >
+        <button type="button" className="btn-secondary mt-3 w-full" onClick={onClose}>
           Cancel
         </button>
       </div>

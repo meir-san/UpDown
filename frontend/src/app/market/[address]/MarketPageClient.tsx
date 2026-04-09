@@ -8,6 +8,7 @@ import { formatProbabilityPrice, formatUsdt } from "@/lib/format";
 import { TradingChart } from "@/components/TradingChart";
 import { TradeForm } from "@/components/TradeForm";
 import { OrderBookPanel } from "@/components/OrderBook";
+import { EmptyState } from "@/components/EmptyState";
 import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { cn } from "@/lib/cn";
 
@@ -31,7 +32,11 @@ export function MarketPageClient({ address }: { address: string }) {
   const localPositions = positions?.filter((p) => p.market.toLowerCase() === address.toLowerCase()) ?? [];
 
   if (isLoading || !market) {
-    return <p className="text-muted">Loading market…</p>;
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center rounded-xl border border-dashed border-border bg-surface-muted/40 text-sm text-muted">
+        Loading market…
+      </div>
+    );
   }
 
   const strike =
@@ -40,27 +45,28 @@ export function MarketPageClient({ address }: { address: string }) {
       : "—";
 
   return (
-    <div className="space-y-8">
-      <Link href="/" className="text-sm font-medium text-brand hover:underline">
-        ← Markets
+    <div className="space-y-10">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline"
+      >
+        ← Back to markets
       </Link>
       <div>
-        <h1 className="font-display text-3xl font-bold text-foreground">{market.pairId}</h1>
-        <p className="mt-2 text-sm text-muted">
-          <span className="font-medium text-foreground">{market.address}</span>
-        </p>
-        <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <span className="rounded-md bg-[rgba(104,107,130,0.12)] px-2 py-1 text-[#484b5e]">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          {market.pairId}
+        </h1>
+        <p className="mt-2 font-mono text-xs text-muted sm:text-sm">{market.address}</p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="rounded-[12px] bg-surface-muted px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-neutral-ink">
             {market.status}
           </span>
-          <span>
+          <span className="text-sm text-muted">
             Strike: <span className="font-semibold text-foreground">{strike}</span>
           </span>
-          <span>
-            Ends in:{" "}
-            <span className="font-mono font-semibold text-foreground">
-              {market.timeRemainingSeconds}s
-            </span>
+          <span className="text-sm text-muted">
+            Time left:{" "}
+            <span className="font-mono font-bold text-brand">{market.timeRemainingSeconds}s</span>
           </span>
         </div>
       </div>
@@ -70,29 +76,51 @@ export function MarketPageClient({ address }: { address: string }) {
         <TradeForm marketAddress={address} />
       </div>
 
-      <section>
-        <h2 className="font-display mb-3 text-xl font-bold text-foreground">Order book</h2>
+      <section className="space-y-4">
+        <h2 className="font-display border-b border-border pb-2 text-xl font-bold text-foreground">
+          Order book
+        </h2>
         <OrderBookPanel marketId={address} />
       </section>
 
-      <section>
-        <h2 className="font-display mb-3 text-xl font-bold text-foreground">Your positions</h2>
-        {!wallet && <p className="text-sm text-muted">Connect to see positions.</p>}
-        {wallet && localPositions.length === 0 && (
-          <p className="text-sm text-muted">No open position in this market.</p>
+      <section className="space-y-4">
+        <h2 className="font-display border-b border-border pb-2 text-xl font-bold text-foreground">
+          Your positions
+        </h2>
+        {!wallet && (
+          <EmptyState title="Connect to view positions">
+            Link your wallet to see holdings for this market. You can still browse markets and order
+            books without connecting.
+          </EmptyState>
         )}
-        <ul className="space-y-2">
+        {wallet && localPositions.length === 0 && (
+          <EmptyState title="No position here">
+            You do not have an open position in this market yet. Place a trade using the form above.
+          </EmptyState>
+        )}
+        <ul className="space-y-3">
           {localPositions.map((p) => (
             <li
               key={`${p.market}-${p.option}`}
               className={cn(
-                "flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                "card-kraken flex flex-wrap items-center justify-between gap-3 px-4 py-3",
+                p.option === 1 && "border-l-4 border-l-success",
+                p.option === 2 && "border-l-4 border-l-down"
               )}
             >
-              <span className="font-semibold text-foreground">{p.optionLabel}</span>
-              <span className="text-sm text-muted">Shares {formatUsdt(p.shares)}</span>
+              <span
+                className={cn(
+                  "rounded-md px-2 py-1 text-sm font-bold",
+                  p.option === 1 ? "bg-success-soft text-success-dark" : "bg-down-soft text-down"
+                )}
+              >
+                {p.optionLabel}
+              </span>
+              <span className="text-sm text-muted">
+                Shares <span className="font-mono font-semibold text-foreground">{formatUsdt(p.shares)}</span>
+              </span>
               <span className="text-sm text-muted">Avg {p.avgPrice} bps</span>
-              <span className="text-xs text-muted">{p.marketStatus}</span>
+              <span className="text-xs font-medium uppercase tracking-wide text-muted">{p.marketStatus}</span>
             </li>
           ))}
         </ul>

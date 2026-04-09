@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
-import { useSignTypedData } from "@account-kit/react";
+import { useAccount, useSignTypedData } from "wagmi";
 import { toast } from "sonner";
 import { getConfig, getMarket, postOrder } from "@/lib/api";
 import { buildOrderTypedData } from "@/lib/eip712";
 import { parseUsdtToAtomic, formatUsdt } from "@/lib/format";
 import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { cn } from "@/lib/cn";
+import { EmptyState } from "@/components/EmptyState";
 
 const PRESETS = [5, 25, 50, 100, 500];
 
@@ -33,7 +33,7 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
     refetchInterval: 15_000,
   });
 
-  const { signTypedDataAsync } = useSignTypedData({ client: undefined });
+  const { signTypedDataAsync } = useSignTypedData();
 
   const feeBps = (cfg?.platformFeeBps ?? 70) + (cfg?.makerFeeBps ?? 80);
 
@@ -80,7 +80,7 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
       };
 
       const typed = buildOrderTypedData(cfg, msg);
-      const signature = await signTypedDataAsync({ typedData: typed });
+      const signature = await signTypedDataAsync(typed);
 
       await postOrder({
         maker: address,
@@ -105,18 +105,24 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
   });
 
   if (!isConnected) {
-    return <p className="text-sm text-muted">Connect a wallet to trade.</p>;
+    return (
+      <EmptyState title="Connect a wallet">
+        Connect with MetaMask or another wallet to place signed UP / DOWN orders on this market.
+      </EmptyState>
+    );
   }
 
   return (
-    <div className={cn("rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-card)]")}>
+    <div className="card-kraken p-5">
       <h3 className="font-display text-lg font-bold text-foreground">Trade</h3>
       <div className="mt-3 flex gap-2">
         <button
           type="button"
           className={cn(
-            "flex-1 rounded-[12px] py-3 text-sm font-semibold",
-            side === 1 ? "bg-success text-white" : "bg-[rgba(148,151,169,0.08)] text-foreground"
+            "flex-1 rounded-[12px] py-3 text-sm font-semibold transition-colors",
+            side === 1
+              ? "bg-success text-white shadow-sm"
+              : "bg-surface-muted text-foreground hover:bg-success-soft"
           )}
           onClick={() => setSide(1)}
         >
@@ -125,8 +131,10 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
         <button
           type="button"
           className={cn(
-            "flex-1 rounded-[12px] py-3 text-sm font-semibold",
-            side === 2 ? "bg-brand text-white" : "bg-[rgba(148,151,169,0.08)] text-foreground"
+            "flex-1 rounded-[12px] py-3 text-sm font-semibold transition-colors",
+            side === 2
+              ? "bg-down text-white shadow-sm"
+              : "bg-surface-muted text-foreground hover:bg-down-soft"
           )}
           onClick={() => setSide(2)}
         >
@@ -192,7 +200,7 @@ export function TradeForm({ marketAddress }: { marketAddress: string }) {
       <button
         type="button"
         disabled={submit.isPending || market?.status !== "ACTIVE"}
-        className="mt-4 w-full rounded-[12px] bg-brand py-[13px] text-base font-semibold text-white disabled:opacity-50"
+        className="btn-primary mt-4 w-full disabled:opacity-50"
         onClick={() => submit.mutate()}
       >
         {submit.isPending ? "Signing…" : `Buy ${side === 1 ? "UP" : "DOWN"}`}

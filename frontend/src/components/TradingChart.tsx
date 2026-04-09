@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { getPriceHistory } from "@/lib/api";
-import { cn } from "@/lib/cn";
 
 type Point = { t: number; p: number };
 
@@ -61,23 +60,35 @@ export function TradingChart({ symbol = "BTC" }: { symbol?: string }) {
   }, [points]);
 
   return (
-    <div className={cn("rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-card)]")}>
-      <div className="flex items-baseline justify-between">
+    <div className="card-kraken flex min-h-[220px] flex-col p-5">
+      <div className="flex items-baseline justify-between border-b border-border pb-3">
         <h3 className="font-display text-lg font-bold text-foreground">{symbol} spot</h3>
         {last && (
-          <span className="text-sm font-semibold text-foreground">
+          <span className="font-mono text-lg font-bold tabular-nums text-brand">
             {last.p.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </span>
         )}
       </div>
-      <div className="mt-3 h-[140px] w-full overflow-hidden">
+      <div className="flex min-h-[160px] flex-1 items-center justify-center pt-4">
         {isLoading && <p className="text-sm text-muted">Loading chart…</p>}
         {!isLoading && points.length < 2 && (
-          <p className="text-sm text-muted">No history yet (upstream may be unavailable).</p>
+          <p className="max-w-xs text-center text-sm leading-relaxed text-muted">
+            No history yet. The price feed proxy may be unavailable.
+          </p>
         )}
         {!isLoading && points.length >= 2 && (
-          <svg viewBox="0 0 320 120" className="h-full w-full text-brand" preserveAspectRatio="none">
-            <path d={pathD} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          <svg
+            viewBox="0 0 320 120"
+            className="h-[160px] w-full max-w-full text-brand"
+            preserveAspectRatio="none"
+          >
+            <path
+              d={pathD}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              vectorEffect="non-scaling-stroke"
+            />
           </svg>
         )}
       </div>

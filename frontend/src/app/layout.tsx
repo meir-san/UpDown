@@ -22,7 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${ibmPlex.variable} antialiased`}>
+      <body className={`${ibmPlex.variable} min-h-screen bg-background font-sans text-foreground antialiased`}>
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

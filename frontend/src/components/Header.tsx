@@ -42,17 +42,20 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b-2 border-brand-subtle bg-white/95 shadow-card backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <Link href="/" className="font-display text-lg font-bold tracking-tight text-brand">
+          <Link
+            href="/"
+            className="font-display text-xl font-bold tracking-tight text-brand transition-opacity hover:opacity-90"
+          >
             UpDown
           </Link>
-          <nav className="flex flex-wrap items-center gap-1 sm:gap-4">
+          <nav className="flex flex-wrap items-center gap-1 sm:gap-2">
             {nav.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
-                className="rounded-lg px-2 py-1.5 text-sm font-medium text-foreground hover:bg-brand-subtle hover:text-brand sm:px-3"
+                className="rounded-[12px] px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-brand-subtle hover:text-brand"
               >
                 {n.label}
               </Link>
@@ -61,15 +64,15 @@ export function Header() {
           <div className="flex flex-wrap items-center gap-2">
             {isConnected && address && (
               <>
-                <span className="hidden text-sm text-muted sm:inline">Balance</span>
-                <span className="rounded-lg bg-[rgba(148,151,169,0.08)] px-3 py-1.5 text-sm font-semibold text-foreground">
-                  ${formatUsdt(bal?.available ?? "0")} USDT
+                <span className="hidden text-xs font-medium uppercase tracking-wide text-muted sm:inline">
+                  Balance
+                </span>
+                <span className="rounded-[12px] border border-border bg-surface-muted px-3 py-2 font-mono text-sm font-semibold tabular-nums text-foreground">
+                  ${formatUsdt(bal?.available ?? "0")}
                 </span>
                 <button
                   type="button"
-                  className={cn(
-                    "rounded-[12px] border border-brand-dark px-4 py-2 text-sm font-semibold text-brand-dark"
-                  )}
+                  className="btn-secondary !py-2 !text-sm"
                   onClick={() => setDepositOpen(true)}
                   disabled={!relayer}
                 >
@@ -77,14 +80,14 @@ export function Header() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-[12px] border border-border px-4 py-2 text-sm font-semibold text-foreground"
+                  className="rounded-[12px] border border-border bg-white px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-surface-muted"
                   onClick={() => setWithdrawOpen(true)}
                 >
                   Withdraw
                 </button>
                 <button
                   type="button"
-                  className="rounded-[12px] bg-brand px-4 py-2 text-sm font-semibold text-white"
+                  className="rounded-[12px] border border-border px-4 py-2 text-sm font-semibold text-muted transition-colors hover:border-brand hover:text-brand"
                   onClick={() => disconnect()}
                 >
                   Disconnect
@@ -92,16 +95,18 @@ export function Header() {
               </>
             )}
             {!isConnected && (
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-2">
                 {connectors.slice(0, 4).map((c) => (
                   <button
                     key={c.uid}
                     type="button"
                     disabled={isPending || !c.ready}
-                    className="rounded-[12px] bg-brand px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 sm:text-sm"
+                    className={cn(
+                      "btn-primary !px-4 !py-[13px] !text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    )}
                     onClick={() => connect({ connector: c })}
                   >
-                    {isPending ? "…" : c.name}
+                    {isPending ? "Connecting…" : `Connect ${c.name}`}
                   </button>
                 ))}
               </div>
