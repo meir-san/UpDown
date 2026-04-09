@@ -20,7 +20,7 @@ async function main() {
   console.log("Maker fee bps:", cfg.makerFeeBps, "Platform fee bps:", cfg.platformFeeBps);
 
   const markets = await http.getMarkets({ timeframe: 300, pair: "BTC-USD" });
-  console.log("Sample 5m BTC markets:", markets.length);
+  console.log("Sample 5 min BTC markets:", markets.length);
 
   const wss = wsUrlFromHttpBase(base);
   const ws = new UpDownWsClient(wss, (msg) => {

@@ -7,9 +7,9 @@ import { MarketCard } from "@/components/MarketCard";
 import { EmptyState } from "@/components/EmptyState";
 
 const SECTIONS = [
-  { title: "QuickFire", subtitle: "5 min markets", tf: 300 as const },
-  { title: "PowerPlay", subtitle: "15 min markets", tf: 900 as const },
-  { title: "MasterMode", subtitle: "60 min markets", tf: 3600 as const },
+  { title: "5 min", tf: 300 as const },
+  { title: "15 min", tf: 900 as const },
+  { title: "1 hour", tf: 3600 as const },
 ];
 
 const PAIR_ROWS: { pair: PairSymbol; label: string }[] = [
@@ -69,7 +69,6 @@ export default function HomePage() {
             <h2 className="font-display text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
               {s.title}
             </h2>
-            <p className="mt-1 text-sm font-medium text-muted">{s.subtitle}</p>
           </div>
           <div className="space-y-10">
             {PAIR_ROWS.map((row) => (

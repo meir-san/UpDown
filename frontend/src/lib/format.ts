@@ -18,6 +18,17 @@ export function parseUsdtToAtomic(dollars: string): bigint {
 }
 
 /** Format on-chain probability price (often 18 decimals) for display. */
+/** Time left for a market; no raw seconds in the string. */
+export function formatTimeRemainingNoSeconds(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s === 0) return "Ended";
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return m > 0 ? `${h}h ${m} min` : `${h}h`;
+  if (m > 0) return `${m} min`;
+  return "Less than a minute";
+}
+
 export function formatProbabilityPrice(raw: string): string {
   try {
     const v = formatUnits(BigInt(raw), 18);

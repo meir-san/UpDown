@@ -4,7 +4,7 @@ Use a **test wallet** and **relayer USDT deposit** (official funding path—no A
 
 1. Connect wallet (MetaMask / WalletConnect / Coinbase).
 2. **Deposit USDT** on Arbitrum to the relayer address from `GET /config` → `relayerAddress`; wait for balance in the app.
-3. Open **QuickFire** (5m) **BTC-USD** market; confirm **chart** shows BTC spot.
+3. Open a **5 min** **BTC-USD** market; confirm **chart** shows BTC spot.
 4. Place **$10 UP** (or min size); confirm **position** appears.
 5. Wait for expiry; automation resolves via **ChainlinkResolver**; position shows win/loss.
 6. **Claim** if applicable; **withdraw** USDT via signed withdrawal.

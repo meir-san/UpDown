@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { getMarket, getPositions } from "@/lib/api";
-import { formatProbabilityPrice, formatUsdt } from "@/lib/format";
+import { formatProbabilityPrice, formatTimeRemainingNoSeconds, formatUsdt } from "@/lib/format";
 import { TradingChart } from "@/components/TradingChart";
 import { TradeForm } from "@/components/TradeForm";
 import { OrderBookPanel } from "@/components/OrderBook";
@@ -64,7 +64,9 @@ export function MarketPageClient({ address }: { address: string }) {
           </span>
           <span className="text-sm text-muted">
             Time left:{" "}
-            <span className="font-mono font-bold text-brand">{market.timeRemainingSeconds}s</span>
+            <span className="font-semibold text-brand">
+              {formatTimeRemainingNoSeconds(market.timeRemainingSeconds)}
+            </span>
           </span>
         </div>
       </div>

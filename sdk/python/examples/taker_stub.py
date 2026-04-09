@@ -12,7 +12,7 @@ def main() -> None:
     cfg = c.get_config()
     print("Relayer (deposit USDT):", cfg.get("relayerAddress"))
     m = c.get_markets(timeframe=300, pair="BTC-USD")
-    print("5m BTC-USD markets:", len(m))
+    print("5 min BTC-USD markets:", len(m))
     c.close()
 
 

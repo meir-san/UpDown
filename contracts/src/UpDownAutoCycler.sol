@@ -81,11 +81,11 @@ contract UpDownAutoCycler is Ownable {
         baseToken = IERC20(_baseToken);
         seedLiquidity = _seedLiquidity;
 
-        // QuickFire: 5 min, 10 min dispute
+        // 5 min markets, 10 min dispute
         timeframes[0] = TimeframeConfig({duration: 300, disputeDuration: 600, active: true});
-        // PowerPlay: 15 min, 30 min dispute
+        // 15 min markets, 30 min dispute
         timeframes[1] = TimeframeConfig({duration: 900, disputeDuration: 1800, active: true});
-        // MasterMode: 60 min, 120 min dispute
+        // 1 hour markets, 120 min dispute
         timeframes[2] = TimeframeConfig({duration: 3600, disputeDuration: 7200, active: true});
 
         supportedPairs[BTCUSD] = true;
