@@ -9,12 +9,10 @@ import { TradingChart } from "@/components/TradingChart";
 import { TradeForm } from "@/components/TradeForm";
 import { OrderBookPanel } from "@/components/OrderBook";
 import { EmptyState } from "@/components/EmptyState";
-import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { cn } from "@/lib/cn";
 
 export function MarketPageClient({ address }: { address: string }) {
-  const wagmiConfig = useInternalWagmiConfig();
-  const { address: wallet } = useAccount({ config: wagmiConfig });
+  const { address: wallet } = useAccount();
 
   const { data: market, isLoading } = useQuery({
     queryKey: ["market", address.toLowerCase()],

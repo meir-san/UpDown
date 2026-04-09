@@ -6,7 +6,6 @@ import { useAccount } from "wagmi";
 import Link from "next/link";
 import { getMarket, getTrades, type TradeRow } from "@/lib/api";
 import { formatUsdt } from "@/lib/format";
-import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/cn";
 
@@ -26,8 +25,7 @@ function tradeResult(t: TradeRow, winner: number | null | undefined, wallet: str
 }
 
 export default function HistoryPage() {
-  const wagmiConfig = useInternalWagmiConfig();
-  const { address, isConnected } = useAccount({ config: wagmiConfig });
+  const { address, isConnected } = useAccount();
   const [offset, setOffset] = useState(0);
 
   const { data: trades, isLoading } = useQuery({

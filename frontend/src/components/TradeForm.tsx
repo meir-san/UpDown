@@ -7,15 +7,13 @@ import { toast } from "sonner";
 import { getConfig, getMarket, postOrder } from "@/lib/api";
 import { buildOrderTypedData } from "@/lib/eip712";
 import { parseUsdtToAtomic, formatUsdt } from "@/lib/format";
-import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { cn } from "@/lib/cn";
 import { EmptyState } from "@/components/EmptyState";
 
 const PRESETS = [5, 25, 50, 100, 500];
 
 export function TradeForm({ marketAddress }: { marketAddress: string }) {
-  const wagmiConfig = useInternalWagmiConfig();
-  const { address, isConnected } = useAccount({ config: wagmiConfig });
+  const { address, isConnected } = useAccount();
   const [side, setSide] = useState<1 | 2>(1);
   const [dollars, setDollars] = useState(25);
   const [orderType, setOrderType] = useState<"MARKET" | "LIMIT">("MARKET");

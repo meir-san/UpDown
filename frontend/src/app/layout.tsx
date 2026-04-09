@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
 import { AppShell } from "@/components/AppShell";
+import { ClientProviders } from "./ClientProviders";
 
 const ibmPlex = IBM_Plex_Sans({
   variable: "--font-ibm-plex",
@@ -23,9 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${ibmPlex.variable} min-h-screen bg-background font-sans text-foreground antialiased`}>
-        <Providers>
+        <ClientProviders>
           <AppShell>{children}</AppShell>
-        </Providers>
+        </ClientProviders>
       </body>
     </html>
   );

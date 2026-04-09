@@ -7,7 +7,6 @@ import { useSetAtom } from "jotai";
 import { useAccount } from "wagmi";
 import { getConfig } from "@/lib/api";
 import { apiConfigAtom } from "@/store/atoms";
-import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { useUpDownWebSocket } from "@/hooks/useUpDownWebSocket";
 import { Header } from "./Header";
 
@@ -16,8 +15,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const marketMatch = pathname?.match(/^\/market\/(0x[a-fA-F0-9]{40})/i);
   const marketFromRoute = marketMatch?.[1] ?? null;
 
-  const wagmiConfig = useInternalWagmiConfig();
-  const { address } = useAccount({ config: wagmiConfig });
+  const { address } = useAccount();
   const setApiConfig = useSetAtom(apiConfigAtom);
 
   const { data: cfg } = useQuery({

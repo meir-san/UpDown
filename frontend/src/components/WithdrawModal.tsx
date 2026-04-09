@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { getBalance, getConfig, postWithdraw } from "@/lib/api";
 import { buildWithdrawTypedData } from "@/lib/eip712";
 import { parseUsdtToAtomic } from "@/lib/format";
-import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -16,8 +15,7 @@ type Props = {
 };
 
 export function WithdrawModal({ open, onClose }: Props) {
-  const wagmiConfig = useInternalWagmiConfig();
-  const { address, isConnected } = useAccount({ config: wagmiConfig });
+  const { address, isConnected } = useAccount();
   const [amountStr, setAmountStr] = useState("");
   const qc = useQueryClient();
   const { signTypedDataAsync } = useSignTypedData();

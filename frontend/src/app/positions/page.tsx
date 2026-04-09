@@ -6,13 +6,11 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { getPositions, postMarketClaim } from "@/lib/api";
 import { formatUsdt } from "@/lib/format";
-import { useInternalWagmiConfig } from "@/hooks/useInternalWagmi";
 import { cn } from "@/lib/cn";
 import { EmptyState } from "@/components/EmptyState";
 
 export default function PositionsPage() {
-  const wagmiConfig = useInternalWagmiConfig();
-  const { address, isConnected } = useAccount({ config: wagmiConfig });
+  const { address, isConnected } = useAccount();
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
