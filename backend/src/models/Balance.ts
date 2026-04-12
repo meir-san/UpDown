@@ -45,11 +45,16 @@ export async function getOrCreateBalance(wallet: string, session?: ClientSession
   return doc!;
 }
 
-export async function creditBalance(wallet: string, amount: bigint, field: 'available' | 'totalDeposited' = 'available'): Promise<void> {
+export async function creditBalance(
+  wallet: string,
+  amount: bigint,
+  field: 'available' | 'totalDeposited' = 'available',
+  session?: ClientSession
+): Promise<void> {
   if (amount <= 0n) throw new Error('credit amount must be positive');
   const normalized = wallet.toLowerCase();
   const amtStr = amount.toString();
-  await getOrCreateBalance(normalized);
+  await getOrCreateBalance(normalized, session);
 
   if (field === 'totalDeposited') {
     await BalanceModel.findOneAndUpdate(
@@ -65,7 +70,8 @@ export async function creditBalance(wallet: string, amount: bigint, field: 'avai
             },
           },
         },
-      ]
+      ],
+      { session }
     );
     return;
   }
@@ -78,7 +84,8 @@ export async function creditBalance(wallet: string, amount: bigint, field: 'avai
           available: { $toString: { $add: [dec('$available'), dec(amtStr)] } },
         },
       },
-    ]
+    ],
+    { session }
   );
 }
 
@@ -353,17 +360,22 @@ export async function reverseSettledFill(
   try {
     await session.withTransaction(async () => {
       const ok = await run(session);
-      if (!ok) throw new Error('reverseSettledFill failed');
+      if (!ok) throw new Error('reverseSettledFill: insufficient seller/treasury balance or buyer update failed');
     });
     return true;
   } catch (e) {
-    console.warn('[Balance] reverseSettledFill transaction failed, trying sequential:', e);
-    try {
-      return await run(undefined);
-    } catch (e2) {
-      console.error('[Balance] reverseSettledFill sequential failed:', e2);
-      return false;
-    }
+    console.error(
+      '[Balance] reverseSettledFill failed — requires MongoDB transactions (replica set). Do not retry blindly; manual reconciliation may be required.',
+      {
+        buyer: b,
+        seller: s,
+        treasury: t,
+        amount: amount.toString(),
+        platformFee: platformFee.toString(),
+        err: e,
+      }
+    );
+    return false;
   } finally {
     session.endSession();
   }
